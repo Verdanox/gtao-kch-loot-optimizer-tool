@@ -1,0 +1,42 @@
+{
+  "_notes": [
+    "Extracted from the MAIN TARGET payout table image. Only the base value (Easy / repeat / clean-run) is stored per painting.",
+    "Verified formula: value = baseValue * (hard ? multipliers.hard : 1) * (firstTimeThisWeek ? multipliers.firstWeek : 1)",
+    "Example check: La Derniere Debauche baseValue 481250 * 4.0 (first week) = 1,925,000 (matches table). 481250 * 1.1 (hard) = 529,375 (matches table).",
+    "The source table also had a column for runs where witnesses/CCTV were left behind (0.75x), but that's an outcome of execution, not a plannable input, so it's intentionally left out of this model.",
+    "La Derniere Debauche is the mandatory story target and must be sold every run. All others are optional rotating paintings that can be sold or displayed."
+  ],
+  "multipliers": {
+    "hard": 1.10,
+    "firstWeek": 4.00
+  },
+  "targets": [
+    { "id": "la-derniere-debauche", "name": "La Dernière Débauche", "mandatory": true, "baseValue": 481250 },
+    { "id": "outcome-of-endeavour", "name": "The Outcome of Endeavour", "mandatory": false, "baseValue": 365000 },
+    { "id": "mi-o-melee", "name": "Mi O Melee", "mandatory": false, "baseValue": 317000 },
+    { "id": "what-are-melons", "name": "What Are Melons?", "mandatory": false, "baseValue": 316000 },
+    { "id": "until-death", "name": "Until Death", "mandatory": false, "baseValue": 315500 },
+    { "id": "trust", "name": "Trust", "mandatory": false, "baseValue": 315000 },
+    { "id": "teckels", "name": "Teckels", "mandatory": false, "baseValue": 314500 },
+    { "id": "a-winding-road-home", "name": "A Winding Road Home", "mandatory": false, "baseValue": 314000 },
+    { "id": "juiced", "name": "Juiced", "mandatory": false, "baseValue": 313500 },
+    { "id": "in-excess-of-success", "name": "In Excess of Success", "mandatory": false, "baseValue": 313000 },
+    { "id": "to-beat-about-the-bush", "name": "To Beat About the Bush", "mandatory": false, "baseValue": 312500 },
+    { "id": "i-fruit", "name": "I, Fruit", "mandatory": false, "baseValue": 312000 },
+    { "id": "stacks-study-v", "name": "Stacks Study V", "mandatory": false, "baseValue": 311500 },
+    { "id": "twindifference", "name": "Twindifference", "mandatory": false, "baseValue": 311000 },
+    { "id": "pumpkin", "name": "Pumpkin", "mandatory": false, "baseValue": 310500 },
+    { "id": "chat-on-fruit", "name": "Chat on Fruit", "mandatory": false, "baseValue": 310000 },
+    { "id": "girl-with-the-pearl-necklace", "name": "The Girl With the Pearl Necklace", "mandatory": false, "baseValue": 309500 },
+    { "id": "winter-nowhere-in-particular", "name": "Winter, Nowhere in Particular", "mandatory": false, "baseValue": 309000 },
+    { "id": "i-hear-voices", "name": "I Hear Voices", "mandatory": false, "baseValue": 308500 },
+    { "id": "consumato", "name": "Consumato", "mandatory": false, "baseValue": 308000 },
+    { "id": "breathless", "name": "Breathless", "mandatory": false, "baseValue": 307500 },
+    { "id": "true-love", "name": "True Love", "mandatory": false, "baseValue": 307000 },
+    { "id": "gone-to-seed", "name": "Gone To Seed", "mandatory": false, "baseValue": 306500 },
+    { "id": "a-cast-of-characters", "name": "A Cast of Characters", "mandatory": false, "baseValue": 306000 },
+    { "id": "brother-brother", "name": "Brother Brother", "mandatory": false, "baseValue": 305500 },
+    { "id": "the-downfall-of-rome", "name": "The Downfall of Rome", "mandatory": false, "baseValue": 305000 },
+    { "id": "hare-oneself-think", "name": "Hare Oneself Think", "mandatory": false, "baseValue": 304500 }
+  ]
+}

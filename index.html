@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kortz Center — Loot Ledger</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+:root{
+  --bg:#12151a;
+  --panel:#191e26;
+  --panel-2:#1f2530;
+  --line:#2b323d;
+  --gold:#c9a24b;
+  --gold-dim:#8a7038;
+  --teal:#49c8b8;
+  --warn:#d9694f;
+  --text:#e9e6dd;
+  --muted:#8b93a0;
+  --mono: 'IBM Plex Mono', monospace;
+  --display: 'Oswald', sans-serif;
+  --body: 'Inter', sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:
+    linear-gradient(var(--bg), var(--bg)),
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(201,162,75,0.03) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(201,162,75,0.03) 40px);
+  color:var(--text);
+  font-family:var(--body);
+  min-height:100vh;
+  padding:28px 16px 60px;
+}
+.wrap{max-width:760px;margin:0 auto;}
+
+.header{
+  border:1px solid var(--line);
+  background:var(--panel);
+  padding:22px 24px;
+  margin-bottom:22px;
+  position:relative;
+  overflow:hidden;
+}
+.header::before{
+  content:"";
+  position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, var(--gold), transparent 70%);
+}
+.eyebrow{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.18em;
+  color:var(--gold);
+  text-transform:uppercase;
+  margin:0 0 6px;
+}
+h1{
+  font-family:var(--display);
+  font-weight:600;
+  font-size:30px;
+  letter-spacing:.01em;
+  margin:0 0 6px;
+  text-transform:uppercase;
+}
+.sub{color:var(--muted); font-size:14px; margin:0; max-width:56ch; line-height:1.5;}
+
+.step{
+  border:1px solid var(--line);
+  background:var(--panel);
+  margin-bottom:16px;
+  padding:20px 22px;
+  position:relative;
+}
+.step-num{
+  font-family:var(--mono);
+  font-size:12px;
+  color:var(--bg);
+  background:var(--gold);
+  width:26px;height:26px;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-weight:600;
+  margin-right:10px;
+  vertical-align:middle;
+}
+.step-title{
+  font-family:var(--display);
+  font-size:16px;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  vertical-align:middle;
+  color:var(--text);
+}
+.step-body{margin-top:16px;}
+
+label.field-label{
+  display:block;
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  color:var(--muted);
+  text-transform:uppercase;
+  margin-bottom:6px;
+}
+select, input[type="text"], input[type="number"]{
+  width:100%;
+  background:var(--panel-2);
+  border:1px solid var(--line);
+  color:var(--text);
+  font-family:var(--body);
+  font-size:14px;
+  padding:9px 10px;
+  outline:none;
+}
+select:focus, input:focus{border-color:var(--gold);}
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+.row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;}
+@media (max-width:560px){ .row3{grid-template-columns:1fr;} .row2{grid-template-columns:1fr;} }
+
+.toggle-group{display:flex; gap:8px; flex-wrap:wrap;}
+.toggle-btn{
+  flex:1;
+  min-width:90px;
+  background:var(--panel-2);
+  border:1px solid var(--line);
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  padding:10px 8px;
+  cursor:pointer;
+  text-align:center;
+  transition:all .12s ease;
+}
+.toggle-btn:hover{border-color:var(--gold-dim);}
+.toggle-btn.active{
+  background:var(--gold);
+  border-color:var(--gold);
+  color:var(--bg);
+  font-weight:600;
+}
+
+.crew-select{display:flex; gap:8px;}
+.crew-opt{
+  flex:1;
+  border:1px solid var(--line);
+  background:var(--panel-2);
+  padding:14px 4px;
+  text-align:center;
+  cursor:pointer;
+  font-family:var(--mono);
+}
+.crew-opt .n{font-size:20px; font-weight:600; color:var(--text); display:block;}
+.crew-opt .lbl{font-size:10px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase;}
+.crew-opt.active{border-color:var(--teal); background:rgba(73,200,184,0.1);}
+.crew-opt.active .n{color:var(--teal);}
+
+.bag-gauges{display:flex; gap:6px; margin-top:14px;}
+.bag{
+  flex:1;
+  height:34px;
+  border:1px solid var(--line);
+  background:var(--panel-2);
+  position:relative;
+  overflow:hidden;
+}
+.bag .fill{
+  position:absolute; left:0; top:0; bottom:0;
+  background:var(--teal);
+  width:0%;
+  transition:width .2s ease, background .2s ease;
+}
+.bag .fill.over{background:var(--warn);}
+.bag .tag{
+  position:relative; z-index:1;
+  font-family:var(--mono); font-size:10px; color:var(--muted);
+  display:flex; align-items:center; justify-content:center; height:100%;
+}
+
+.loot-list{display:flex; flex-direction:column; gap:10px;}
+.loot-row{
+  border:1px solid var(--line);
+  background:var(--panel-2);
+  padding:12px;
+  display:grid;
+  grid-template-columns: 1.4fr 1.3fr 0.9fr auto auto;
+  gap:10px;
+  align-items:center;
+}
+@media (max-width:640px){
+  .loot-row{grid-template-columns:1fr 1fr; grid-template-areas:"name name" "cat val" "bc rm";}
+  .loot-row input[data-f="name"]{grid-area:name;}
+  .loot-row select{grid-area:cat;}
+  .loot-row input[data-f="val"]{grid-area:val;}
+  .loot-row .bc-wrap{grid-area:bc;}
+  .loot-row .rm-btn{grid-area:rm;}
+}
+.bc-wrap{display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; color:var(--muted); white-space:nowrap;}
+.bc-wrap input{width:auto;}
+.bc-wrap.locked{opacity:.4;}
+.rm-btn{
+  background:transparent; border:1px solid var(--line); color:var(--muted);
+  width:30px; height:30px; cursor:pointer; font-size:16px; line-height:1;
+}
+.rm-btn:hover{border-color:var(--warn); color:var(--warn);}
+.req2{font-size:9px; color:var(--gold); display:block; margin-top:2px;}
+
+.add-row-btn{
+  margin-top:12px;
+  background:transparent;
+  border:1px dashed var(--gold-dim);
+  color:var(--gold);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  padding:10px;
+  width:100%;
+  cursor:pointer;
+}
+.add-row-btn:hover{border-color:var(--gold); background:rgba(201,162,75,0.06);}
+
+.hint{font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:10px; line-height:1.6;}
+.hint b{color:var(--gold);}
+
+/* Results */
+.results{
+  border:1px solid var(--gold-dim);
+  background:var(--panel);
+  padding:0;
+  margin-top:20px;
+}
+.results-head{
+  background:var(--panel-2);
+  padding:14px 22px;
+  border-bottom:1px solid var(--line);
+  display:flex; justify-content:space-between; align-items:center;
+}
+.results-head .t{font-family:var(--display); text-transform:uppercase; letter-spacing:.05em; font-size:15px;}
+.results-head .stamp{
+  font-family:var(--mono); font-size:10px; color:var(--teal); border:1px solid var(--teal);
+  padding:3px 8px; letter-spacing:.08em; text-transform:uppercase;
+}
+.results-head .stamp.warn{color:var(--warn); border-color:var(--warn);}
+.ledger{padding:18px 22px;}
+.ledger-row{
+  display:flex; justify-content:space-between; align-items:baseline;
+  padding:8px 0; border-bottom:1px solid var(--line);
+  font-family:var(--mono); font-size:13px;
+}
+.ledger-row .k{color:var(--muted);}
+.ledger-row .v{color:var(--text); font-weight:500;}
+.ledger-row .v.neg{color:var(--warn);}
+.ledger-row.total{
+  border-bottom:none; border-top:1px solid var(--gold-dim);
+  margin-top:6px; padding-top:14px;
+}
+.ledger-row.total .k{color:var(--gold); font-size:14px; letter-spacing:.05em; text-transform:uppercase; font-family:var(--display);}
+.ledger-row.total .v{color:var(--gold); font-size:22px; font-weight:600; font-family:var(--display);}
+
+.bag-manifest{padding:0 22px 20px;}
+.manifest-title{font-family:var(--mono); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin:4px 0 10px;}
+.manifest-item{
+  display:flex; justify-content:space-between; font-size:13px; padding:6px 0;
+  border-bottom:1px solid var(--line);
+}
+.manifest-item .name{color:var(--text);}
+.manifest-item .name .flag{color:var(--gold); font-family:var(--mono); font-size:10px; margin-left:6px;}
+.manifest-item .val{font-family:var(--mono); color:var(--teal);}
+.manifest-empty{color:var(--muted); font-size:12px; font-style:italic; padding:6px 0;}
+
+.warn-box{
+  margin:0 22px 18px; padding:10px 12px;
+  border:1px solid var(--warn); background:rgba(217,105,79,0.08);
+  font-family:var(--mono); font-size:12px; color:var(--warn); line-height:1.6;
+}
+
+.footnote{
+  font-family:var(--mono); font-size:10px; color:var(--muted); text-align:center;
+  margin-top:26px; line-height:1.8; opacity:.7;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <p class="eyebrow">Case File · Kortz Center Heist</p>
+    <h1>Loot Ledger</h1>
+    <p class="sub">Work out the highest-paying bag loadout for your crew. Scope your secondary targets, set your crew and difficulty, then let the ledger figure out what actually fits in your bags.</p>
+  </div>
+
+  <!-- STEP 1: Primary target -->
+  <div class="step">
+    <span class="step-num">1</span><span class="step-title">Primary Target</span>
+    <div class="step-body">
+      <div class="row2">
+        <div>
+          <label class="field-label">Target</label>
+          <select id="primaryTarget"></select>
+        </div>
+        <div>
+          <label class="field-label">Difficulty</label>
+          <div class="toggle-group" id="difficultyToggle">
+            <div class="toggle-btn active" data-val="normal">Normal</div>
+            <div class="toggle-btn" data-val="hard">Hard (+10%)</div>
+          </div>
+        </div>
+      </div>
+      <div class="row2" style="margin-top:14px;">
+        <div>
+          <label class="field-label">Weekly status</label>
+          <div class="toggle-group" id="weeklyToggle">
+            <div class="toggle-btn active" data-val="first">First run this week</div>
+            <div class="toggle-btn" data-val="repeat">Repeat run</div>
+          </div>
+        </div>
+        <div>
+          <label class="field-label">Primary payout (this run)</label>
+          <div id="primaryValueDisplay" style="font-family:var(--mono); font-size:20px; color:var(--gold); padding-top:8px;">$0</div>
+        </div>
+      </div>
+      <p class="hint" id="primaryHint"></p>
+    </div>
+  </div>
+
+  <!-- STEP 2: Crew -->
+  <div class="step">
+    <span class="step-num">2</span><span class="step-title">Crew Size</span>
+    <div class="step-body">
+      <label class="field-label">Players in the crew (1 bag each)</label>
+      <div class="crew-select" id="crewSelect">
+        <div class="crew-opt" data-val="1"><span class="n">1</span><span class="lbl">Solo</span></div>
+        <div class="crew-opt" data-val="2"><span class="n">2</span><span class="lbl">Duo</span></div>
+        <div class="crew-opt" data-val="3"><span class="n">3</span><span class="lbl">Trio</span></div>
+        <div class="crew-opt" data-val="4"><span class="n">4</span><span class="lbl">Full crew</span></div>
+      </div>
+      <div class="bag-gauges" id="bagGauges"></div>
+      <p class="hint">Every player carries one bag. Small paintings eat about half a bag; jewelry and small artifacts take much less room. <b>Crisp Gallery (Exhibit Level 2)</b> needs at least two players to open at all.</p>
+    </div>
+  </div>
+
+  <!-- STEP 3: Secondary loot -->
+  <div class="step">
+    <span class="step-num">3</span><span class="step-title">Scoped Secondary Loot</span>
+    <div class="step-body">
+      <div class="loot-list" id="lootList"></div>
+      <button class="add-row-btn" id="addLootBtn">+ Add scoped item</button>
+      <p class="hint">Enter each item you photographed during the scope-out along with its value. Mark up to <b>three</b> as the Buyer's Choice — these are the buyer's requested pieces and get packed first, before the rest of the bag is optimized for value.</p>
+    </div>
+  </div>
+
+  <!-- STEP 4: Elite challenge -->
+  <div class="step">
+    <span class="step-num">4</span><span class="step-title">Elite Challenge</span>
+    <div class="step-body">
+      <label class="field-label">Going for the Elite Challenge?</label>
+      <div class="toggle-group" id="eliteToggle" style="max-width:280px;">
+        <div class="toggle-btn active" data-val="no">No</div>
+        <div class="toggle-btn" data-val="yes">Yes</div>
+      </div>
+      <p class="hint">If yes, the ledger locks in your Buyer's Choice items first and adds the per-player Elite bonus — but only if every Buyer's Choice item actually fits in the bags.</p>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results">
+    <div class="results-head">
+      <span class="t">Finale Result</span>
+      <span class="stamp" id="statusStamp">Feasible</span>
+    </div>
+    <div class="warn-box" id="warnBox" style="display:none;"></div>
+    <div class="ledger" id="ledger"></div>
+    <div class="bag-manifest">
+      <p class="manifest-title">Bag Manifest — Optimal Loadout</p>
+      <div id="manifestList"></div>
+    </div>
+  </div>
+
+  <p class="footnote">Kortz Center Heist released July 14, 2026. Primary Target payouts, the +10% Hard Mode modifier, the $50,000 Buyer's Request bonus, the $50,000-per-player Elite Challenge bonus and the $100,000 repeat-run planning fee reflect publicly reported figures and may shift with balance updates. Secondary Target dollar values are randomized per run — enter what you actually scoped. Bag-space weights are estimates based on reported carrying limits, not exact published figures.</p>
+
+</div>
+
+<script>
+// ---------- DATA ----------
+const PRIMARY_TARGETS = [
+  {
+    id: 'debauche',
+    name: "La Dernière Débauche",
+    note: "Mandatory story target — must be sold.",
+    normal: { first: 1925000, repeat: 481250 },
+    // Hard mode reported as a flat +10% modifier
+  },
+  {
+    id: 'consumato',
+    name: "Consumato",
+    note: "Repeat-run value confirmed at $308,000 (Normal). First-run-of-week value is not yet officially confirmed — estimated here using the same first/repeat ratio as the story target.",
+    normal: { first: 1232000, repeat: 308000 },
+    estimatedFirst: true
+  }
+];
+
+const HARD_MODE_MULT = 1.10;
+const BUYER_REQUEST_BONUS = 50000;
+const ELITE_BONUS_PER_PLAYER = 50000;
+const REPEAT_RUN_FEE = 100000;
+const BAG_UNIT_QUANT = 20; // 1 bag = 20 units (units of 0.05 bag)
+
+const LOOT_CATEGORIES = [
+  { id: 'small_painting', label: 'Small Painting', weight: 0.50, minPlayers: 1 },
+  { id: 'jewelry_case',   label: 'Jewelry Display Case', weight: 0.20, minPlayers: 1 },
+  { id: 'gem_case',       label: 'Gem / Diamond Case', weight: 0.25, minPlayers: 1 },
+  { id: 'statue_artifact',label: 'Statue / Small Artifact', weight: 0.15, minPlayers: 1 },
+  { id: 'vault_lockbox',  label: 'Vault Lockbox (drilled)', weight: 0.30, minPlayers: 1 },
+  { id: 'crisp_painting', label: 'Crisp Gallery Painting (Lvl 2)', weight: 0.50, minPlayers: 2 },
+  { id: 'crisp_case',     label: 'Crisp Gallery Display Case (Lvl 2)', weight: 0.20, minPlayers: 2 },
+];
+
+// ---------- STATE ----------
+let state = {
+  primaryId: 'debauche',
+  difficulty: 'normal',
+  weekly: 'first',
+  players: 2,
+  elite: 'no',
+  loot: []
+};
+let lootIdCounter = 0;
+
+function newLootRow(name, catId, value){
+  lootIdCounter++;
+  return { id: lootIdCounter, name: name || '', category: catId || LOOT_CATEGORIES[0].id, value: value !== undefined ? value : '', buyersChoice: false };
+}
+
+// seed with a few example rows
+state.loot.push(newLootRow('Small oil painting', 'small_painting', 45000));
+state.loot.push(newLootRow('Ruby display case', 'gem_case', 32000));
+state.loot.push(newLootRow('Silver statuette', 'statue_artifact', 18000));
+
+// ---------- HELPERS ----------
+function money(n){
+  const neg = n < 0;
+  n = Math.round(Math.abs(n));
+  return (neg? '-':'') + '$' + n.toLocaleString('en-US');
+}
+function catById(id){ return LOOT_CATEGORIES.find(c => c.id === id); }
+function buyersChoiceCount(){ return state.loot.filter(l => l.buyersChoice).length; }
+
+// 0/1 knapsack: items = [{id, value, weightUnits}], capacityUnits -> {value, chosenIds}
+function knapsack(items, capacityUnits){
+  const n = items.length;
+  if (n === 0 || capacityUnits <= 0) return { value: 0, chosenIds: [] };
+  const dp = Array.from({length:n+1}, () => new Array(capacityUnits+1).fill(0));
+  for (let i=1;i<=n;i++){
+    const it = items[i-1];
+    for (let c=0;c<=capacityUnits;c++){
+      dp[i][c] = dp[i-1][c];
+      if (it.weightUnits <= c){
+        const cand = dp[i-1][c-it.weightUnits] + it.value;
+        if (cand > dp[i][c]) dp[i][c] = cand;
+      }
+    }
+  }
+  // backtrack
+  let c = capacityUnits;
+  const chosen = [];
+  for (let i=n;i>=1;i--){
+    if (dp[i][c] !== dp[i-1][c]){
+      chosen.push(items[i-1].id);
+      c -= items[i-1].weightUnits;
+    }
+  }
+  return { value: dp[n][capacityUnits], chosenIds: chosen };
+}
+
+// ---------- RENDER: static selects ----------
+function initSelects(){
+  const primSel = document.getElementById('primaryTarget');
+  PRIMARY_TARGETS.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.name;
+    primSel.appendChild(opt);
+  });
+  primSel.value = state.primaryId;
+  primSel.addEventListener('change', e => { state.primaryId = e.target.value; renderAll(); });
+
+  document.querySelectorAll('#difficultyToggle .toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      state.difficulty = btn.dataset.val;
+      document.querySelectorAll('#difficultyToggle .toggle-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAll();
+    });
+  });
+  document.querySelectorAll('#weeklyToggle .toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      state.weekly = btn.dataset.val;
+      document.querySelectorAll('#weeklyToggle .toggle-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAll();
+    });
+  });
+  document.querySelectorAll('#eliteToggle .toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      state.elite = btn.dataset.val;
+      document.querySelectorAll('#eliteToggle .toggle-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAll();
+    });
+  });
+  document.querySelectorAll('.crew-opt').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      state.players = parseInt(btn.dataset.val, 10);
+      document.querySelectorAll('.crew-opt').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAll();
+    });
+  });
+  document.getElementById('addLootBtn').addEventListener('click', ()=>{
+    state.loot.push(newLootRow('', LOOT_CATEGORIES[0].id, ''));
+    renderAll();
+  });
+
+  // set initial active crew button
+  document.querySelector(`.crew-opt[data-val="${state.players}"]`).classList.add('active');
+}
+
+// ---------- RENDER: loot rows ----------
+function renderLootList(){
+  const container = document.getElementById('lootList');
+  container.innerHTML = '';
+  const bcCount = buyersChoiceCount();
+
+  state.loot.forEach(item => {
+    const cat = catById(item.category);
+    const row = document.createElement('div');
+    row.className = 'loot-row';
+
+    // name
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text'; nameInput.placeholder = 'Item name'; nameInput.value = item.name;
+    nameInput.dataset.f = 'name';
+    nameInput.addEventListener('input', e => { item.name = e.target.value; renderAll(false); });
+
+    // category
+    const catSelect = document.createElement('select');
+    LOOT_CATEGORIES.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = `${c.label} (${c.weight.toFixed(2)} bag${c.minPlayers>1? ', 2P':''})`;
+      if (c.id === item.category) opt.selected = true;
+      catSelect.appendChild(opt);
+    });
+    catSelect.addEventListener('change', e => {
+      item.category = e.target.value;
+      const newCat = catById(item.category);
+      if (newCat.minPlayers > state.players) item.buyersChoice = false;
+      renderAll();
+    });
+
+    // value
+    const valInput = document.createElement('input');
+    valInput.type = 'number'; valInput.placeholder = 'Value $'; valInput.min = '0';
+    valInput.value = item.value; valInput.dataset.f = 'val';
+    valInput.addEventListener('input', e => { item.value = e.target.value === '' ? '' : Number(e.target.value); renderAll(false); });
+
+    // buyer's choice checkbox
+    const bcWrap = document.createElement('label');
+    bcWrap.className = 'bc-wrap';
+    const eligible = cat.minPlayers <= state.players;
+    const maxedOut = bcCount >= 3 && !item.buyersChoice;
+    if (!eligible || maxedOut) bcWrap.classList.add('locked');
+    const bcCheck = document.createElement('input');
+    bcCheck.type = 'checkbox';
+    bcCheck.checked = item.buyersChoice;
+    bcCheck.disabled = !eligible || maxedOut;
+    bcCheck.addEventListener('change', e => { item.buyersChoice = e.target.checked; renderAll(); });
+    bcWrap.appendChild(bcCheck);
+    const bcText = document.createElement('span');
+    bcText.innerHTML = "Buyer's Choice" + (!eligible ? '<span class="req2"> needs 2P</span>' : '');
+    bcWrap.appendChild(bcText);
+
+    // remove button
+    const rmBtn = document.createElement('button');
+    rmBtn.className = 'rm-btn'; rmBtn.textContent = '×';
+    rmBtn.addEventListener('click', () => {
+      state.loot = state.loot.filter(l => l.id !== item.id);
+      renderAll();
+    });
+
+    row.appendChild(nameInput);
+    row.appendChild(catSelect);
+    row.appendChild(valInput);
+    row.appendChild(bcWrap);
+    row.appendChild(rmBtn);
+    container.appendChild(row);
+  });
+
+  if (state.loot.length === 0){
+    const empty = document.createElement('p');
+    empty.className = 'hint';
+    empty.textContent = 'No scoped items yet — add what you photographed during the scope-out.';
+    container.appendChild(empty);
+  }
+}
+
+// ---------- RENDER: bag gauges (updated after calc) ----------
+function renderBagGauges(usedUnits, totalUnits, overflow){
+  const el = document.getElementById('bagGauges');
+  el.innerHTML = '';
+  for (let i=0;i<state.players;i++){
+    const bagCapacity = BAG_UNIT_QUANT; // per-bag units
+    const bagStart = i*bagCapacity;
+    const bagEnd = bagStart+bagCapacity;
+    const usedInThisBag = Math.max(0, Math.min(usedUnits, bagEnd) - bagStart);
+    const pct = Math.min(100, (usedInThisBag/bagCapacity)*100);
+    const bag = document.createElement('div');
+    bag.className = 'bag';
+    const fill = document.createElement('div');
+    fill.className = 'fill' + (overflow ? ' over':'');
+    fill.style.width = pct.toFixed(0)+'%';
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.textContent = 'P'+(i+1);
+    bag.appendChild(fill);
+    bag.appendChild(tag);
+    el.appendChild(bag);
+  }
+}
+
+// ---------- MAIN CALC ----------
+function calcPrimary(){
+  const p = PRIMARY_TARGETS.find(t => t.id === state.primaryId);
+  let base = state.weekly === 'first' ? p.normal.first : p.normal.repeat;
+  if (state.difficulty === 'hard') base = base * HARD_MODE_MULT;
+  return { value: base, meta: p };
+}
+
+function renderPrimaryInfo(){
+  const { value, meta } = calcPrimary();
+  document.getElementById('primaryValueDisplay').textContent = money(value);
+  let hint = meta.note;
+  if (meta.estimatedFirst && state.weekly === 'first') {
+    hint += ' <b>This first-run figure is an estimate.</b>';
+  }
+  document.getElementById('primaryHint').innerHTML = hint;
+}
+
+function runOptimizer(){
+  const totalUnits = state.players * BAG_UNIT_QUANT;
+
+  const valid = state.loot.filter(l => l.name.trim() !== '' && l.value !== '' && !isNaN(l.value) && catById(l.category));
+  const eligible = valid.filter(l => catById(l.category).minPlayers <= state.players);
+
+  const toUnits = (w) => Math.round(w / 0.05);
+
+  const mandatory = eligible.filter(l => l.buyersChoice).map(l => ({ id:l.id, value:Number(l.value), weightUnits: toUnits(catById(l.category).weight) }));
+  const optional = eligible.filter(l => !l.buyersChoice).map(l => ({ id:l.id, value:Number(l.value), weightUnits: toUnits(catById(l.category).weight) }));
+
+  const mandatoryWeightSum = mandatory.reduce((s,i)=>s+i.weightUnits,0);
+
+  let chosenMandatoryIds, mandatoryValue, allBuyerItemsFit, leftoverUnits;
+
+  if (mandatoryWeightSum <= totalUnits){
+    chosenMandatoryIds = mandatory.map(i=>i.id);
+    mandatoryValue = mandatory.reduce((s,i)=>s+i.value,0);
+    allBuyerItemsFit = mandatory.length > 0;
+    leftoverUnits = totalUnits - mandatoryWeightSum;
+  } else {
+    const res = knapsack(mandatory, totalUnits);
+    chosenMandatoryIds = res.chosenIds;
+    mandatoryValue = res.value;
+    allBuyerItemsFit = false;
+    const usedByMandatory = chosenMandatoryIds.reduce((s,id)=>{
+      const it = mandatory.find(m=>m.id===id); return s + (it? it.weightUnits:0);
+    },0);
+    leftoverUnits = totalUnits - usedByMandatory;
+  }
+
+  const optRes = knapsack(optional, Math.max(0,leftoverUnits));
+  const optionalValue = optRes.value;
+  const chosenOptionalIds = optRes.chosenIds;
+
+  const usedUnitsFinal = (totalUnits - Math.max(0,leftoverUnits)) + chosenOptionalIds.reduce((s,id)=>{
+    const it = optional.find(o=>o.id===id); return s+(it?it.weightUnits:0);
+  },0);
+
+  const secondaryBagValue = mandatoryValue + optionalValue;
+  const buyerRequestBonus = allBuyerItemsFit ? BUYER_REQUEST_BONUS : 0;
+  const eliteEligible = state.elite === 'yes' && allBuyerItemsFit && mandatory.length > 0;
+  const eliteBonus = eliteEligible ? ELITE_BONUS_PER_PLAYER * state.players : 0;
+  const planningFee = state.weekly === 'repeat' ? REPEAT_RUN_FEE : 0;
+
+  const { value: primaryValue } = calcPrimary();
+  const finalTake = primaryValue + secondaryBagValue + buyerRequestBonus + eliteBonus - planningFee;
+
+  return {
+    totalUnits, usedUnitsFinal,
+    primaryValue, secondaryBagValue, buyerRequestBonus, eliteBonus, planningFee, finalTake,
+    allBuyerItemsFit, mandatoryCount: mandatory.length, mandatoryWeightSum,
+    chosenIds: new Set([...chosenMandatoryIds, ...chosenOptionalIds]),
+    mandatoryIdsSet: new Set(mandatory.map(m=>m.id)),
+    eligibleIds: new Set(eligible.map(e=>e.id)),
+    invalidCount: state.loot.length - valid.length,
+    ineligibleCount: valid.length - eligible.length
+  };
+}
+
+function renderResults(){
+  const r = runOptimizer();
+  const overflow = !r.allBuyerItemsFit && r.mandatoryCount > 0;
+
+  renderBagGauges(r.usedUnitsFinal, r.totalUnits, overflow);
+
+  const stamp = document.getElementById('statusStamp');
+  if (overflow){
+    stamp.textContent = 'Overweight'; stamp.classList.add('warn');
+  } else {
+    stamp.textContent = 'Feasible'; stamp.classList.remove('warn');
+  }
+
+  const warnBox = document.getElementById('warnBox');
+  if (overflow){
+    warnBox.style.display = 'block';
+    warnBox.textContent = `Your Buyer's Choice picks don't all fit in your crew's bags (need ${(r.mandatoryWeightSum/BAG_UNIT_QUANT).toFixed(2)} bags, have ${state.players.toFixed(2)}). The ledger packed the best-value subset it could, but the $50,000 Buyer's Request bonus${state.elite==='yes' ? ' and the Elite Challenge bonus' : ''} are forfeited. Drop an item or bring another player.`;
+  } else {
+    warnBox.style.display = 'none';
+  }
+
+  const ledger = document.getElementById('ledger');
+  ledger.innerHTML = '';
+  const rows = [
+    ['Primary Target', money(r.primaryValue)],
+    ['Secondary Targets (optimized bag)', money(r.secondaryBagValue)],
+    ["Buyer's Request bonus", r.buyerRequestBonus ? money(r.buyerRequestBonus) : '— not earned'],
+    ['Elite Challenge bonus', r.eliteBonus ? money(r.eliteBonus) : (state.elite==='yes' ? '— not earned' : '— not attempted')],
+  ];
+  if (r.planningFee > 0) rows.push(['Repeat-run planning fee', money(-r.planningFee)]);
+  rows.forEach(([k,v])=>{
+    const row = document.createElement('div');
+    row.className = 'ledger-row';
+    row.innerHTML = `<span class="k">${k}</span><span class="v${v.toString().startsWith('-')?' neg':''}">${v}</span>`;
+    ledger.appendChild(row);
+  });
+  const totalRow = document.createElement('div');
+  totalRow.className = 'ledger-row total';
+  totalRow.innerHTML = `<span class="k">Final Take</span><span class="v">${money(r.finalTake)}</span>`;
+  ledger.appendChild(totalRow);
+
+  // manifest
+  const manifest = document.getElementById('manifestList');
+  manifest.innerHTML = '';
+  const chosenItems = state.loot.filter(l => r.chosenIds.has(l.id));
+  if (chosenItems.length === 0){
+    manifest.innerHTML = '<p class="manifest-empty">No secondary items packed yet — add scoped loot above.</p>';
+  } else {
+    chosenItems.forEach(l => {
+      const div = document.createElement('div');
+      div.className = 'manifest-item';
+      const isBC = r.mandatoryIdsSet.has(l.id);
+      div.innerHTML = `<span class="name">${l.name}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(Number(l.value))}</span>`;
+      manifest.appendChild(div);
+    });
+  }
+  if (r.ineligibleCount > 0){
+    const note = document.createElement('p');
+    note.className = 'hint';
+    note.style.marginTop = '10px';
+    note.textContent = `${r.ineligibleCount} item(s) excluded — they need more players than your current crew size.`;
+    manifest.appendChild(note);
+  }
+}
+
+function renderAll(fullLootRerender = true){
+  if (fullLootRerender) renderLootList();
+  renderPrimaryInfo();
+  renderResults();
+}
+
+initSelects();
+renderAll();
+</script>
+</body>
+</html>
