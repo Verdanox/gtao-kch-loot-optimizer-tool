@@ -180,48 +180,33 @@ select:focus, input:focus{border-color:var(--gold);}
   display:flex; align-items:center; justify-content:center; height:100%;
 }
 
-.loot-list{display:flex; flex-direction:column; gap:10px;}
+.loot-list{display:flex; flex-direction:column; gap:18px;}
+.loot-floor-heading{
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.08em; margin:0 0 8px;
+}
+.loot-floor-group{display:flex; flex-direction:column; gap:10px;}
 .loot-row{
   border:1px solid var(--line);
   background:var(--panel-2);
   padding:12px;
   display:grid;
-  grid-template-columns: 1.4fr 1.3fr 0.9fr auto auto;
+  grid-template-columns: 1.6fr 0.9fr auto;
   gap:10px;
   align-items:center;
 }
+.loot-row.ineligible{opacity:.45;}
+.loot-name{font-size:14px; color:var(--text);}
 @media (max-width:640px){
-  .loot-row{grid-template-columns:1fr 1fr; grid-template-areas:"name name" "cat val" "bc rm";}
-  .loot-row input[data-f="name"]{grid-area:name;}
-  .loot-row select{grid-area:cat;}
+  .loot-row{grid-template-columns:1fr 1fr; grid-template-areas:"name name" "val bc";}
+  .loot-row .loot-name{grid-area:name;}
   .loot-row input[data-f="val"]{grid-area:val;}
   .loot-row .bc-wrap{grid-area:bc;}
-  .loot-row .rm-btn{grid-area:rm;}
 }
 .bc-wrap{display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; color:var(--muted); white-space:nowrap;}
 .bc-wrap input{width:auto;}
 .bc-wrap.locked{opacity:.4;}
-.rm-btn{
-  background:transparent; border:1px solid var(--line); color:var(--muted);
-  width:30px; height:30px; cursor:pointer; font-size:16px; line-height:1;
-}
-.rm-btn:hover{border-color:var(--warn); color:var(--warn);}
 .req2{font-size:9px; color:var(--gold); display:block; margin-top:2px;}
-
-.add-row-btn{
-  margin-top:12px;
-  background:transparent;
-  border:1px dashed var(--gold-dim);
-  color:var(--gold);
-  font-family:var(--mono);
-  font-size:12px;
-  letter-spacing:.05em;
-  text-transform:uppercase;
-  padding:10px;
-  width:100%;
-  cursor:pointer;
-}
-.add-row-btn:hover{border-color:var(--gold); background:rgba(201,162,75,0.06);}
 
 .hint{font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:10px; line-height:1.6;}
 .hint b{color:var(--gold);}
@@ -271,6 +256,21 @@ select:focus, input:focus{border-color:var(--gold);}
 .manifest-item .name .flag{color:var(--gold); font-family:var(--mono); font-size:10px; margin-left:6px;}
 .manifest-item .val{font-family:var(--mono); color:var(--teal);}
 .manifest-empty{color:var(--muted); font-size:12px; font-style:italic; padding:6px 0;}
+
+.player-card{
+  border:1px solid var(--line);
+  background:var(--panel);
+  padding:14px 16px;
+  margin-bottom:12px;
+}
+.player-card:last-child{margin-bottom:0;}
+.player-card-head{
+  font-family:var(--mono); font-size:12px; color:var(--gold);
+  text-transform:uppercase; letter-spacing:.06em; margin:0 0 8px;
+}
+.player-card .ledger-row{font-size:13px; padding:6px 0;}
+.player-card .ledger-row.total{margin-top:6px; padding-top:10px;}
+.player-card .ledger-row.total .v{font-size:18px;}
 
 .warn-box{
   margin:0 22px 18px; padding:10px 12px;
@@ -339,7 +339,7 @@ select:focus, input:focus{border-color:var(--gold);}
         <div class="crew-opt" data-val="4"><span class="n">4</span><span class="lbl">Full crew</span></div>
       </div>
       <div class="bag-gauges" id="bagGauges"></div>
-      <p class="hint">Every player carries one bag. Small paintings eat about half a bag; jewelry and small artifacts take much less room. <b>Crisp Gallery (Exhibit Level 2)</b> needs at least two players to open at all.</p>
+      <p class="hint" id="crewHint">Every player carries one bag. Small paintings eat about half a bag; jewelry and small artifacts take much less room. Some floors need at least two players to access.</p>
     </div>
   </div>
 
@@ -348,8 +348,7 @@ select:focus, input:focus{border-color:var(--gold);}
     <span class="step-num">3</span><span class="step-title">Scoped Secondary Loot</span>
     <div class="step-body">
       <div class="loot-list" id="lootList"></div>
-      <button class="add-row-btn" id="addLootBtn">+ Add scoped item</button>
-      <p class="hint">Enter each item you photographed during the scope-out along with its value. Mark up to <b>three</b> as the Buyer's Choice — these are the buyer's requested pieces and get packed first, before the rest of the bag is optimized for value.</p>
+      <p class="hint">Every scoutable item is listed below, grouped by the floor you'll find it on. Fill in the value for whatever you actually photographed and leave the rest blank. Mark up to <b>three</b> (fewer is fine) as the Buyer's Choice — these only affect bag packing once the Elite Challenge (Step 4) is turned on. With Elite off, the ledger just optimizes for maximum bag value regardless of these picks.</p>
     </div>
   </div>
 
@@ -362,7 +361,7 @@ select:focus, input:focus{border-color:var(--gold);}
         <div class="toggle-btn active" data-val="no">No</div>
         <div class="toggle-btn" data-val="yes">Yes</div>
       </div>
-      <p class="hint">If yes, the ledger locks in your Buyer's Choice items first and adds the per-player Elite bonus — but only if every Buyer's Choice item actually fits in the bags.</p>
+      <p class="hint">If yes, the ledger locks in your Buyer's Choice items first and unlocks the Buyer's Request bonus plus the per-player Elite bonus (both doubled on Hard mode) — but only if every marked Buyer's Choice item actually fits in the bags. If no, Buyer's Choice picks are ignored and the ledger packs purely for maximum bag value.</p>
     </div>
   </div>
 
@@ -375,70 +374,37 @@ select:focus, input:focus{border-color:var(--gold);}
     <div class="warn-box" id="warnBox" style="display:none;"></div>
     <div class="ledger" id="ledger"></div>
     <div class="bag-manifest">
-      <p class="manifest-title">Bag Manifest — Optimal Loadout</p>
-      <div id="manifestList"></div>
+      <p class="manifest-title">Payout by Player</p>
+      <div id="payoutList"></div>
     </div>
   </div>
 
-  <p class="footnote">Kortz Center Heist released July 14, 2026. Primary Target payouts, the +10% Hard Mode modifier, the $50,000 Buyer's Request bonus, the $50,000-per-player Elite Challenge bonus and the $100,000 repeat-run planning fee reflect publicly reported figures and may shift with balance updates. Secondary Target dollar values are randomized per run — enter what you actually scoped. Bag-space weights are estimates based on reported carrying limits, not exact published figures.</p>
+  <p class="footnote">Kortz Center Heist released July 14, 2026. Primary Target payouts, the +10% Hard Mode modifier, the Buyer's Request bonus ($50,000 Normal / $100,000 Hard), the Elite Challenge bonus ($50,000 Normal / $100,000 Hard, per player) and the $100,000 repeat-run planning fee reflect publicly reported figures and may shift with balance updates. Secondary Target dollar values are randomized per run — enter what you actually scoped. Bag-space weights match the reported per-player carrying limit of 100 units per bag.</p>
 
 </div>
 
 <script>
-// ---------- DATA ----------
-const PRIMARY_TARGETS = [
-  {
-    id: 'debauche',
-    name: "La Dernière Débauche",
-    note: "Mandatory story target — must be sold.",
-    normal: { first: 1925000, repeat: 481250 },
-    // Hard mode reported as a flat +10% modifier
-  },
-  {
-    id: 'consumato',
-    name: "Consumato",
-    note: "Repeat-run value confirmed at $308,000 (Normal). First-run-of-week value is not yet officially confirmed — estimated here using the same first/repeat ratio as the story target.",
-    normal: { first: 1232000, repeat: 308000 },
-    estimatedFirst: true
-  }
-];
+// ---------- DATA (loaded at runtime from data/*.json) ----------
+let PRIMARY_TARGETS = [];
+let PRIMARY_MULTIPLIERS = { hard: 1.10, firstWeek: 4.00 };
+let LOOT_CATALOG = [];
+let BAG_CAPACITY_PER_PLAYER = 100;
 
-const HARD_MODE_MULT = 1.10;
-const BUYER_REQUEST_BONUS = 50000;
-const ELITE_BONUS_PER_PLAYER = 50000;
+const BUYER_REQUEST_BONUS_NORMAL = 50000;
+const BUYER_REQUEST_BONUS_HARD = 100000;
+const ELITE_BONUS_PER_PLAYER_NORMAL = 50000;
+const ELITE_BONUS_PER_PLAYER_HARD = 100000;
 const REPEAT_RUN_FEE = 100000;
-const BAG_UNIT_QUANT = 20; // 1 bag = 20 units (units of 0.05 bag)
-
-const LOOT_CATEGORIES = [
-  { id: 'small_painting', label: 'Small Painting', weight: 0.50, minPlayers: 1 },
-  { id: 'jewelry_case',   label: 'Jewelry Display Case', weight: 0.20, minPlayers: 1 },
-  { id: 'gem_case',       label: 'Gem / Diamond Case', weight: 0.25, minPlayers: 1 },
-  { id: 'statue_artifact',label: 'Statue / Small Artifact', weight: 0.15, minPlayers: 1 },
-  { id: 'vault_lockbox',  label: 'Vault Lockbox (drilled)', weight: 0.30, minPlayers: 1 },
-  { id: 'crisp_painting', label: 'Crisp Gallery Painting (Lvl 2)', weight: 0.50, minPlayers: 2 },
-  { id: 'crisp_case',     label: 'Crisp Gallery Display Case (Lvl 2)', weight: 0.20, minPlayers: 2 },
-];
 
 // ---------- STATE ----------
 let state = {
-  primaryId: 'debauche',
+  primaryId: 'la-derniere-debauche',
   difficulty: 'normal',
   weekly: 'first',
-  players: 2,
+  players: 1,
   elite: 'no',
-  loot: []
+  loot: [] // one entry per catalog item, seeded in init() once LOOT_CATALOG loads
 };
-let lootIdCounter = 0;
-
-function newLootRow(name, catId, value){
-  lootIdCounter++;
-  return { id: lootIdCounter, name: name || '', category: catId || LOOT_CATEGORIES[0].id, value: value !== undefined ? value : '', buyersChoice: false };
-}
-
-// seed with a few example rows
-state.loot.push(newLootRow('Small oil painting', 'small_painting', 45000));
-state.loot.push(newLootRow('Ruby display case', 'gem_case', 32000));
-state.loot.push(newLootRow('Silver statuette', 'statue_artifact', 18000));
 
 // ---------- HELPERS ----------
 function money(n){
@@ -446,8 +412,15 @@ function money(n){
   n = Math.round(Math.abs(n));
   return (neg? '-':'') + '$' + n.toLocaleString('en-US');
 }
-function catById(id){ return LOOT_CATEGORIES.find(c => c.id === id); }
+function itemById(id){ return LOOT_CATALOG.find(i => i.itemId === id); }
 function buyersChoiceCount(){ return state.loot.filter(l => l.buyersChoice).length; }
+function bonusAmounts(){
+  const hard = state.difficulty === 'hard';
+  return {
+    buyerRequest: hard ? BUYER_REQUEST_BONUS_HARD : BUYER_REQUEST_BONUS_NORMAL,
+    elitePerPlayer: hard ? ELITE_BONUS_PER_PLAYER_HARD : ELITE_BONUS_PER_PLAYER_NORMAL
+  };
+}
 
 // 0/1 knapsack: items = [{id, value, weightUnits}], capacityUnits -> {value, chosenIds}
 function knapsack(items, capacityUnits){
@@ -474,6 +447,24 @@ function knapsack(items, capacityUnits){
     }
   }
   return { value: dp[n][capacityUnits], chosenIds: chosen };
+}
+
+// First-Fit-Decreasing bin pack: distributes chosen items across `players`
+// individual bags of `capacityPerPlayer` each. Index 0 is always the host.
+function assignItemsToBags(items, players, capacityPerPlayer){
+  const bags = Array.from({length: players}, () => ({ items: [], value: 0, weightUsed: 0 }));
+  const sorted = items.slice().sort((a, b) => b.weight - a.weight);
+  sorted.forEach(it => {
+    let target = bags.find(b => b.weightUsed + it.weight <= capacityPerPlayer);
+    if (!target){
+      target = bags.reduce((best, b) =>
+        (capacityPerPlayer - b.weightUsed) > (capacityPerPlayer - best.weightUsed) ? b : best, bags[0]);
+    }
+    target.items.push(it);
+    target.value += it.value;
+    target.weightUsed += it.weight;
+  });
+  return bags;
 }
 
 // ---------- RENDER: static selects ----------
@@ -519,13 +510,15 @@ function initSelects(){
       renderAll();
     });
   });
-  document.getElementById('addLootBtn').addEventListener('click', ()=>{
-    state.loot.push(newLootRow('', LOOT_CATEGORIES[0].id, ''));
-    renderAll();
-  });
-
   // set initial active crew button
   document.querySelector(`.crew-opt[data-val="${state.players}"]`).classList.add('active');
+}
+
+function renderCrewHint(){
+  const twoPlayerFloors = [...new Set(LOOT_CATALOG.filter(i => i.minPlayers > 1).map(i => i.floor))];
+  const floorText = twoPlayerFloors.length ? twoPlayerFloors.join(', ') : 'Certain rooms';
+  document.getElementById('crewHint').innerHTML =
+    `Every player carries one bag. Small paintings eat about half a bag; jewelry and small artifacts take much less room. <b>${floorText}</b> floor items need at least two players to access.`;
 }
 
 // ---------- RENDER: loot rows ----------
@@ -533,90 +526,65 @@ function renderLootList(){
   const container = document.getElementById('lootList');
   container.innerHTML = '';
   const bcCount = buyersChoiceCount();
+  const floors = [...new Set(LOOT_CATALOG.map(i => i.floor))];
 
-  state.loot.forEach(item => {
-    const cat = catById(item.category);
-    const row = document.createElement('div');
-    row.className = 'loot-row';
+  floors.forEach(floor => {
+    const group = document.createElement('div');
+    group.className = 'loot-floor-group';
+    const heading = document.createElement('p');
+    heading.className = 'loot-floor-heading';
+    heading.textContent = floor;
+    group.appendChild(heading);
 
-    // name
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text'; nameInput.placeholder = 'Item name'; nameInput.value = item.name;
-    nameInput.dataset.f = 'name';
-    nameInput.addEventListener('input', e => { item.name = e.target.value; renderAll(false); });
+    LOOT_CATALOG.filter(c => c.floor === floor).forEach(cat => {
+      const item = state.loot.find(l => l.itemId === cat.itemId);
+      const row = document.createElement('div');
+      row.className = 'loot-row';
+      const eligible = cat.minPlayers <= state.players;
+      if (!eligible) row.classList.add('ineligible');
 
-    // category
-    const catSelect = document.createElement('select');
-    LOOT_CATEGORIES.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = `${c.label} (${c.weight.toFixed(2)} bag${c.minPlayers>1? ', 2P':''})`;
-      if (c.id === item.category) opt.selected = true;
-      catSelect.appendChild(opt);
-    });
-    catSelect.addEventListener('change', e => {
-      item.category = e.target.value;
-      const newCat = catById(item.category);
-      if (newCat.minPlayers > state.players) item.buyersChoice = false;
-      renderAll();
-    });
+      // name
+      const nameEl = document.createElement('div');
+      nameEl.className = 'loot-name';
+      nameEl.textContent = cat.name;
 
-    // value
-    const valInput = document.createElement('input');
-    valInput.type = 'number'; valInput.placeholder = 'Value $'; valInput.min = '0';
-    valInput.value = item.value; valInput.dataset.f = 'val';
-    valInput.addEventListener('input', e => { item.value = e.target.value === '' ? '' : Number(e.target.value); renderAll(false); });
+      // value
+      const valInput = document.createElement('input');
+      valInput.type = 'number'; valInput.placeholder = 'Value $'; valInput.min = '0';
+      valInput.value = item.value; valInput.dataset.f = 'val';
+      valInput.addEventListener('input', e => { item.value = e.target.value === '' ? '' : Number(e.target.value); renderAll(false); });
 
-    // buyer's choice checkbox
-    const bcWrap = document.createElement('label');
-    bcWrap.className = 'bc-wrap';
-    const eligible = cat.minPlayers <= state.players;
-    const maxedOut = bcCount >= 3 && !item.buyersChoice;
-    if (!eligible || maxedOut) bcWrap.classList.add('locked');
-    const bcCheck = document.createElement('input');
-    bcCheck.type = 'checkbox';
-    bcCheck.checked = item.buyersChoice;
-    bcCheck.disabled = !eligible || maxedOut;
-    bcCheck.addEventListener('change', e => { item.buyersChoice = e.target.checked; renderAll(); });
-    bcWrap.appendChild(bcCheck);
-    const bcText = document.createElement('span');
-    bcText.innerHTML = "Buyer's Choice" + (!eligible ? '<span class="req2"> needs 2P</span>' : '');
-    bcWrap.appendChild(bcText);
+      // buyer's choice checkbox
+      const bcWrap = document.createElement('label');
+      bcWrap.className = 'bc-wrap';
+      const maxedOut = bcCount >= 3 && !item.buyersChoice;
+      if (!eligible || maxedOut) bcWrap.classList.add('locked');
+      const bcCheck = document.createElement('input');
+      bcCheck.type = 'checkbox';
+      bcCheck.checked = item.buyersChoice;
+      bcCheck.disabled = !eligible || maxedOut;
+      bcCheck.addEventListener('change', e => { item.buyersChoice = e.target.checked; renderAll(); });
+      bcWrap.appendChild(bcCheck);
+      const bcText = document.createElement('span');
+      bcText.innerHTML = "Buyer's Choice" + (!eligible ? '<span class="req2"> needs 2P</span>' : '');
+      bcWrap.appendChild(bcText);
 
-    // remove button
-    const rmBtn = document.createElement('button');
-    rmBtn.className = 'rm-btn'; rmBtn.textContent = '×';
-    rmBtn.addEventListener('click', () => {
-      state.loot = state.loot.filter(l => l.id !== item.id);
-      renderAll();
+      row.appendChild(nameEl);
+      row.appendChild(valInput);
+      row.appendChild(bcWrap);
+      group.appendChild(row);
     });
 
-    row.appendChild(nameInput);
-    row.appendChild(catSelect);
-    row.appendChild(valInput);
-    row.appendChild(bcWrap);
-    row.appendChild(rmBtn);
-    container.appendChild(row);
+    container.appendChild(group);
   });
-
-  if (state.loot.length === 0){
-    const empty = document.createElement('p');
-    empty.className = 'hint';
-    empty.textContent = 'No scoped items yet — add what you photographed during the scope-out.';
-    container.appendChild(empty);
-  }
 }
 
 // ---------- RENDER: bag gauges (updated after calc) ----------
-function renderBagGauges(usedUnits, totalUnits, overflow){
+function renderBagGauges(bags, overflow){
   const el = document.getElementById('bagGauges');
   el.innerHTML = '';
   for (let i=0;i<state.players;i++){
-    const bagCapacity = BAG_UNIT_QUANT; // per-bag units
-    const bagStart = i*bagCapacity;
-    const bagEnd = bagStart+bagCapacity;
-    const usedInThisBag = Math.max(0, Math.min(usedUnits, bagEnd) - bagStart);
-    const pct = Math.min(100, (usedInThisBag/bagCapacity)*100);
+    const pct = Math.min(100, (bags[i].weightUsed/BAG_CAPACITY_PER_PLAYER)*100);
     const bag = document.createElement('div');
     bag.className = 'bag';
     const fill = document.createElement('div');
@@ -634,143 +602,203 @@ function renderBagGauges(usedUnits, totalUnits, overflow){
 // ---------- MAIN CALC ----------
 function calcPrimary(){
   const p = PRIMARY_TARGETS.find(t => t.id === state.primaryId);
-  let base = state.weekly === 'first' ? p.normal.first : p.normal.repeat;
-  if (state.difficulty === 'hard') base = base * HARD_MODE_MULT;
+  let base = p.baseValue;
+  if (state.weekly === 'first') base *= PRIMARY_MULTIPLIERS.firstWeek;
+  if (state.difficulty === 'hard') base *= PRIMARY_MULTIPLIERS.hard;
   return { value: base, meta: p };
 }
 
 function renderPrimaryInfo(){
   const { value, meta } = calcPrimary();
   document.getElementById('primaryValueDisplay').textContent = money(value);
-  let hint = meta.note;
-  if (meta.estimatedFirst && state.weekly === 'first') {
-    hint += ' <b>This first-run figure is an estimate.</b>';
-  }
-  document.getElementById('primaryHint').innerHTML = hint;
+  document.getElementById('primaryHint').innerHTML = meta.mandatory
+    ? 'Mandatory story target — must be sold every run.'
+    : 'Optional rotating painting — may be sold or displayed.';
 }
 
 function runOptimizer(){
-  const totalUnits = state.players * BAG_UNIT_QUANT;
+  const totalUnits = state.players * BAG_CAPACITY_PER_PLAYER;
 
-  const valid = state.loot.filter(l => l.name.trim() !== '' && l.value !== '' && !isNaN(l.value) && catById(l.category));
-  const eligible = valid.filter(l => catById(l.category).minPlayers <= state.players);
+  const valid = state.loot.filter(l => l.value !== '' && !isNaN(l.value));
+  const eligible = valid.filter(l => itemById(l.itemId).minPlayers <= state.players);
+  const toItem = (l) => ({ id: l.itemId, value: Number(l.value), weightUnits: itemById(l.itemId).weight });
 
-  const toUnits = (w) => Math.round(w / 0.05);
+  const bcIdsSet = new Set(eligible.filter(l => l.buyersChoice).map(l => l.itemId));
 
-  const mandatory = eligible.filter(l => l.buyersChoice).map(l => ({ id:l.id, value:Number(l.value), weightUnits: toUnits(catById(l.category).weight) }));
-  const optional = eligible.filter(l => !l.buyersChoice).map(l => ({ id:l.id, value:Number(l.value), weightUnits: toUnits(catById(l.category).weight) }));
+  let chosenIds, secondaryBagValue, allBuyerItemsFit, mandatoryWeightSum;
 
-  const mandatoryWeightSum = mandatory.reduce((s,i)=>s+i.weightUnits,0);
+  if (state.elite === 'yes' && bcIdsSet.size > 0){
+    const mandatory = eligible.filter(l => l.buyersChoice).map(toItem);
+    const optional = eligible.filter(l => !l.buyersChoice).map(toItem);
+    mandatoryWeightSum = mandatory.reduce((s,i)=>s+i.weightUnits,0);
 
-  let chosenMandatoryIds, mandatoryValue, allBuyerItemsFit, leftoverUnits;
-
-  if (mandatoryWeightSum <= totalUnits){
-    chosenMandatoryIds = mandatory.map(i=>i.id);
-    mandatoryValue = mandatory.reduce((s,i)=>s+i.value,0);
-    allBuyerItemsFit = mandatory.length > 0;
-    leftoverUnits = totalUnits - mandatoryWeightSum;
+    let chosenMandatoryIds, mandatoryValue, leftoverUnits;
+    if (mandatoryWeightSum <= totalUnits){
+      chosenMandatoryIds = mandatory.map(i=>i.id);
+      mandatoryValue = mandatory.reduce((s,i)=>s+i.value,0);
+      allBuyerItemsFit = true;
+      leftoverUnits = totalUnits - mandatoryWeightSum;
+    } else {
+      const res = knapsack(mandatory, totalUnits);
+      chosenMandatoryIds = res.chosenIds;
+      mandatoryValue = res.value;
+      allBuyerItemsFit = false;
+      const usedByMandatory = chosenMandatoryIds.reduce((s,id)=>{
+        const it = mandatory.find(m=>m.id===id); return s + (it? it.weightUnits:0);
+      },0);
+      leftoverUnits = totalUnits - usedByMandatory;
+    }
+    const optRes = knapsack(optional, Math.max(0,leftoverUnits));
+    secondaryBagValue = mandatoryValue + optRes.value;
+    chosenIds = new Set([...chosenMandatoryIds, ...optRes.chosenIds]);
   } else {
-    const res = knapsack(mandatory, totalUnits);
-    chosenMandatoryIds = res.chosenIds;
-    mandatoryValue = res.value;
-    allBuyerItemsFit = false;
-    const usedByMandatory = chosenMandatoryIds.reduce((s,id)=>{
-      const it = mandatory.find(m=>m.id===id); return s + (it? it.weightUnits:0);
-    },0);
-    leftoverUnits = totalUnits - usedByMandatory;
+    mandatoryWeightSum = 0;
+    allBuyerItemsFit = true;
+    const all = eligible.map(toItem);
+    const res = knapsack(all, totalUnits);
+    secondaryBagValue = res.value;
+    chosenIds = new Set(res.chosenIds);
   }
 
-  const optRes = knapsack(optional, Math.max(0,leftoverUnits));
-  const optionalValue = optRes.value;
-  const chosenOptionalIds = optRes.chosenIds;
-
-  const usedUnitsFinal = (totalUnits - Math.max(0,leftoverUnits)) + chosenOptionalIds.reduce((s,id)=>{
-    const it = optional.find(o=>o.id===id); return s+(it?it.weightUnits:0);
-  },0);
-
-  const secondaryBagValue = mandatoryValue + optionalValue;
-  const buyerRequestBonus = allBuyerItemsFit ? BUYER_REQUEST_BONUS : 0;
-  const eliteEligible = state.elite === 'yes' && allBuyerItemsFit && mandatory.length > 0;
-  const eliteBonus = eliteEligible ? ELITE_BONUS_PER_PLAYER * state.players : 0;
+  const bonuses = bonusAmounts();
+  const attempted = state.elite === 'yes' && bcIdsSet.size > 0;
+  const eliteEligible = attempted && allBuyerItemsFit;
+  const buyerRequestBonusEach = eliteEligible ? bonuses.buyerRequest : 0;
+  const eliteBonusEach = eliteEligible ? bonuses.elitePerPlayer : 0;
   const planningFee = state.weekly === 'repeat' ? REPEAT_RUN_FEE : 0;
 
   const { value: primaryValue } = calcPrimary();
-  const finalTake = primaryValue + secondaryBagValue + buyerRequestBonus + eliteBonus - planningFee;
+  const overflow = attempted && !allBuyerItemsFit;
+
+  const chosenItemList = state.loot
+    .filter(l => chosenIds.has(l.itemId))
+    .map(l => ({ itemId: l.itemId, value: Number(l.value), weight: itemById(l.itemId).weight }));
+  const bags = assignItemsToBags(chosenItemList, state.players, BAG_CAPACITY_PER_PLAYER);
 
   return {
-    totalUnits, usedUnitsFinal,
-    primaryValue, secondaryBagValue, buyerRequestBonus, eliteBonus, planningFee, finalTake,
-    allBuyerItemsFit, mandatoryCount: mandatory.length, mandatoryWeightSum,
-    chosenIds: new Set([...chosenMandatoryIds, ...chosenOptionalIds]),
-    mandatoryIdsSet: new Set(mandatory.map(m=>m.id)),
-    eligibleIds: new Set(eligible.map(e=>e.id)),
-    invalidCount: state.loot.length - valid.length,
+    primaryValue, secondaryBagValue, buyerRequestBonusEach, eliteBonusEach, planningFee,
+    overflow, attempted, mandatoryWeightSum,
+    chosenIds, bcIdsSet, bags,
     ineligibleCount: valid.length - eligible.length
   };
 }
 
 function renderResults(){
   const r = runOptimizer();
-  const overflow = !r.allBuyerItemsFit && r.mandatoryCount > 0;
 
-  renderBagGauges(r.usedUnitsFinal, r.totalUnits, overflow);
+  renderBagGauges(r.bags, r.overflow);
 
   const stamp = document.getElementById('statusStamp');
-  if (overflow){
+  if (r.overflow){
     stamp.textContent = 'Overweight'; stamp.classList.add('warn');
   } else {
     stamp.textContent = 'Feasible'; stamp.classList.remove('warn');
   }
 
   const warnBox = document.getElementById('warnBox');
-  if (overflow){
+  if (r.overflow){
     warnBox.style.display = 'block';
-    warnBox.textContent = `Your Buyer's Choice picks don't all fit in your crew's bags (need ${(r.mandatoryWeightSum/BAG_UNIT_QUANT).toFixed(2)} bags, have ${state.players.toFixed(2)}). The ledger packed the best-value subset it could, but the $50,000 Buyer's Request bonus${state.elite==='yes' ? ' and the Elite Challenge bonus' : ''} are forfeited. Drop an item or bring another player.`;
+    warnBox.textContent = `Your Buyer's Choice picks don't all fit in your crew's bags (need ${(r.mandatoryWeightSum/BAG_CAPACITY_PER_PLAYER).toFixed(2)} bags, have ${state.players.toFixed(2)}). The ledger packed the best-value subset it could, but the Buyer's Request and Elite Challenge bonuses are forfeited. Drop an item or bring another player.`;
   } else {
     warnBox.style.display = 'none';
   }
 
+  const bonusLabel = (amount) => amount ? `${money(amount)} / player` : (r.attempted ? '— not earned' : '— not attempted');
+
   const ledger = document.getElementById('ledger');
   ledger.innerHTML = '';
-  const rows = [
-    ['Primary Target', money(r.primaryValue)],
-    ['Secondary Targets (optimized bag)', money(r.secondaryBagValue)],
-    ["Buyer's Request bonus", r.buyerRequestBonus ? money(r.buyerRequestBonus) : '— not earned'],
-    ['Elite Challenge bonus', r.eliteBonus ? money(r.eliteBonus) : (state.elite==='yes' ? '— not earned' : '— not attempted')],
-  ];
-  if (r.planningFee > 0) rows.push(['Repeat-run planning fee', money(-r.planningFee)]);
-  rows.forEach(([k,v])=>{
+
+  const addRow = (k, v, extraClass) => {
     const row = document.createElement('div');
-    row.className = 'ledger-row';
+    row.className = 'ledger-row' + (extraClass ? ' ' + extraClass : '');
     row.innerHTML = `<span class="k">${k}</span><span class="v${v.toString().startsWith('-')?' neg':''}">${v}</span>`;
     ledger.appendChild(row);
-  });
-  const totalRow = document.createElement('div');
-  totalRow.className = 'ledger-row total';
-  totalRow.innerHTML = `<span class="k">Final Take</span><span class="v">${money(r.finalTake)}</span>`;
-  ledger.appendChild(totalRow);
+  };
 
-  // manifest
-  const manifest = document.getElementById('manifestList');
-  manifest.innerHTML = '';
-  const chosenItems = state.loot.filter(l => r.chosenIds.has(l.id));
-  if (chosenItems.length === 0){
-    manifest.innerHTML = '<p class="manifest-empty">No secondary items packed yet — add scoped loot above.</p>';
-  } else {
-    chosenItems.forEach(l => {
-      const div = document.createElement('div');
-      div.className = 'manifest-item';
-      const isBC = r.mandatoryIdsSet.has(l.id);
-      div.innerHTML = `<span class="name">${l.name}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(Number(l.value))}</span>`;
-      manifest.appendChild(div);
-    });
+  addRow('Primary Target', money(r.primaryValue));
+  addRow('Secondary Targets (optimized bag)', money(r.secondaryBagValue));
+  addRow('Total Take (Career Progress)', money(r.primaryValue + r.secondaryBagValue), 'total');
+
+  const extras = [
+    ["Buyer's Request bonus", bonusLabel(r.buyerRequestBonusEach)],
+    ['Elite Challenge bonus', bonusLabel(r.eliteBonusEach)],
+  ];
+  if (r.planningFee > 0) extras.push(['Repeat-run planning fee (host only)', money(-r.planningFee)]);
+
+  const extrasLabel = document.createElement('p');
+  extrasLabel.className = 'manifest-title';
+  extrasLabel.style.marginTop = '14px';
+  extrasLabel.textContent = 'Not counted toward career progress';
+  ledger.appendChild(extrasLabel);
+  extras.forEach(([k, v]) => addRow(k, v));
+
+  // payout by player
+  const payout = document.getElementById('payoutList');
+  payout.innerHTML = '';
+  const bonusEach = r.buyerRequestBonusEach + r.eliteBonusEach;
+
+  for (let i = 0; i < state.players; i++){
+    const isHost = i === 0;
+    const bag = r.bags[i];
+    const card = document.createElement('div');
+    card.className = 'player-card';
+
+    const head = document.createElement('p');
+    head.className = 'player-card-head';
+    head.textContent = isHost ? 'Host (P1)' : `Player ${i + 1}`;
+    card.appendChild(head);
+
+    if (bag.items.length === 0){
+      const empty = document.createElement('p');
+      empty.className = 'manifest-empty';
+      empty.textContent = 'No items in this bag.';
+      card.appendChild(empty);
+    } else {
+      bag.items.forEach(it => {
+        const cat = itemById(it.itemId);
+        const isBC = r.bcIdsSet.has(it.itemId);
+        const div = document.createElement('div');
+        div.className = 'manifest-item';
+        div.innerHTML = `<span class="name">${cat.name}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(it.value)}</span>`;
+        card.appendChild(div);
+      });
+    }
+
+    if (isHost){
+      const primaryRow = document.createElement('div');
+      primaryRow.className = 'ledger-row';
+      primaryRow.innerHTML = `<span class="k">Primary Target</span><span class="v">${money(r.primaryValue)}</span>`;
+      card.appendChild(primaryRow);
+    }
+    if (bonusEach > 0){
+      const bonusRow = document.createElement('div');
+      bonusRow.className = 'ledger-row';
+      bonusRow.innerHTML = `<span class="k">Buyer's Request + Elite bonus</span><span class="v">${money(bonusEach)}</span>`;
+      card.appendChild(bonusRow);
+    }
+    if (isHost && r.planningFee > 0){
+      const feeRow = document.createElement('div');
+      feeRow.className = 'ledger-row';
+      feeRow.innerHTML = `<span class="k">Repeat-run planning fee</span><span class="v neg">${money(-r.planningFee)}</span>`;
+      card.appendChild(feeRow);
+    }
+
+    let take = bag.value + bonusEach;
+    if (isHost) take += r.primaryValue - r.planningFee;
+    const totalRow = document.createElement('div');
+    totalRow.className = 'ledger-row total';
+    totalRow.innerHTML = `<span class="k">Take</span><span class="v">${money(take)}</span>`;
+    card.appendChild(totalRow);
+
+    payout.appendChild(card);
   }
+
   if (r.ineligibleCount > 0){
     const note = document.createElement('p');
     note.className = 'hint';
     note.style.marginTop = '10px';
     note.textContent = `${r.ineligibleCount} item(s) excluded — they need more players than your current crew size.`;
-    manifest.appendChild(note);
+    payout.appendChild(note);
   }
 }
 
@@ -780,8 +808,32 @@ function renderAll(fullLootRerender = true){
   renderResults();
 }
 
-initSelects();
-renderAll();
+async function init(){
+  try {
+    const [primaryRes, lootRes] = await Promise.all([
+      fetch('data/primary-targets.json'),
+      fetch('data/secondary-loot.json')
+    ]);
+    const primaryData = await primaryRes.json();
+    const lootData = await lootRes.json();
+
+    PRIMARY_TARGETS = primaryData.targets.slice().sort((a, b) => a.name.localeCompare(b.name));
+    PRIMARY_MULTIPLIERS = primaryData.multipliers;
+    LOOT_CATALOG = lootData.items;
+    BAG_CAPACITY_PER_PLAYER = lootData.bagCapacityPerPlayer;
+
+    state.loot = LOOT_CATALOG.map(cat => ({ itemId: cat.itemId, value: '', buyersChoice: false }));
+
+    renderCrewHint();
+    initSelects();
+    renderAll();
+  } catch (err) {
+    document.getElementById('ledger').innerHTML =
+      `<p class="hint" style="color:var(--warn);">Failed to load loot data (${err.message}). Serve this folder over HTTP (not file://) and reload.</p>`;
+  }
+}
+
+init();
 </script>
 </body>
 </html>

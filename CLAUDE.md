@@ -6,13 +6,17 @@ weekly status, and Buyer's Choice picks.
 
 ## Data model
 - `data/primary-targets.json` — primary painting payouts. Only a base value is
-  stored per painting; hard mode, first-week, and alarm-triggered are all
-  clean multipliers applied on top (see `_notes` in the file for the derived
+  stored per painting; hard mode and first-week are the only two clean
+  multipliers applied on top (see `_notes` in the file for the derived
   formula and verification).
 - `data/secondary-loot.json` — every scoutable secondary item, its floor
   location, and its bag-weight (0–100 scale, one bag = 100). Dollar values are
   NOT stored here — they're randomized per scope-out and entered by the user
-  at runtime, keyed by `itemId`.
+  at runtime, keyed by `itemId`. The UI shows the full catalog as an
+  always-visible chart grouped by floor (not a picker you add rows to) —
+  every item's value input starts blank until the user fills in what they
+  actually scoped. Item weight is intentionally never shown to the user —
+  bag-space math is the tool's job, not theirs.
 
 ## Core logic
 - Bag capacity = `players * 100`.
@@ -21,11 +25,27 @@ weekly status, and Buyer's Choice picks.
   rest of the scoped items.
 - If Buyer's Choice items don't all fit, the best-fitting subset is packed
   and the Buyer's Request + Elite Challenge bonuses are marked as forfeited.
+- **Buyer's Choice is conditional on Elite Challenge.** Marking up to three
+  (fewer is fine) items as Buyer's Choice only affects packing when Elite
+  Challenge is toggled on. With Elite off, Buyer's Choice tags are purely
+  informational (still shown in the manifest) and the optimizer runs a
+  single unconstrained knapsack over all scoped items to maximize bag value
+  — no forced inclusion, no Buyer's Request/Elite bonus, no overflow state.
+- **Buyer's Request and Elite Challenge bonuses double on Hard mode**: $50k
+  Buyer's Request / $50k-per-player Elite on Normal, $100k / $100k-per-player
+  on Hard.
+- **Payout is split per player, not shown as one crew total.** The pooled
+  knapsack above still decides *which* secondary items get packed; a
+  First-Fit-Decreasing bin-pack then assigns that chosen set across
+  individual player bags (capacity 100 each) for display — index 0 is
+  always "the host." Host = Primary Target + their bag − the repeat-run fee
+  (host-only cost); players 2–4 = their bag only. If Buyer's Request/Elite
+  are earned, **every player gets the full bonus amount each**, not a split
+  pool. The "Total Take (Career Progress)" headline is Primary + Secondary
+  only — no bonuses, no fee — since it represents the in-game progress stat,
+  not any individual player's actual cash take.
 
 ## Known open questions (confirm before shipping)
-- `minPlayers: 2` on "Second Exhibit" floor items in secondary-loot.json is an
-  assumption (mapped to the two-player Crisp Gallery room from research, not
-  explicitly labeled in the source spreadsheet). Verify against your own notes.
 - The source payout table also included values for runs where witnesses/CCTV
   were left behind (0.75x). That's an execution outcome, not a planning
   input, so it's been cut from primary-targets.json entirely — no field for

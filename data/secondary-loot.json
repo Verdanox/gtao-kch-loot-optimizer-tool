@@ -2,7 +2,7 @@
   "_notes": [
     "Converted from KCH_secondary_loot_-_dejarjar013.csv.",
     "bagCapacityPerPlayer: each player's bag holds 100 weight units (matches the CSV's Weight column directly, no conversion needed).",
-    "minPlayers: the CSV does not label a player requirement. It is inferred here — items on the 'Second Exhibit' floor are assumed to be the two-player Crisp Gallery room based on prior research. Please confirm/correct this against your own notes before treating it as ground truth.",
+    "minPlayers: the CSV does not label a player requirement. Confirmed by the user (in-game) that this room is called 'Crisp Gallery', not 'Second Exhibit' — floor renamed accordingly.",
     "value: NOT in the CSV. Secondary loot values are randomized per scope-out in-game, so this field is intentionally left null — the app should keep collecting it as a per-run user input, keyed to itemId."
   ],
   "bagCapacityPerPlayer": 100,
@@ -31,13 +31,13 @@
     { "itemId": "2-B", "name": "Coquard Carcanet", "floor": "Second", "weight": 30, "minPlayers": 1 },
     { "itemId": "2-C", "name": "Horse Statue", "floor": "Second", "weight": 30, "minPlayers": 1 },
     { "itemId": "2-D", "name": "Coquard Bracelets", "floor": "Second", "weight": 10, "minPlayers": 1 },
-    { "itemId": "2-E", "name": "The Great Circle Back", "floor": "Second Exhibit", "weight": 50, "minPlayers": 2 },
-    { "itemId": "2-F", "name": "Don't Forgo These Blueprints", "floor": "Second Exhibit", "weight": 50, "minPlayers": 2 },
-    { "itemId": "2-G", "name": "Fertility Statue", "floor": "Second Exhibit", "weight": 20, "minPlayers": 2 },
-    { "itemId": "2-H", "name": "Gemstone", "floor": "Second Exhibit", "weight": 30, "minPlayers": 2 },
-    { "itemId": "2-I", "name": "Meteorite Fragment", "floor": "Second Exhibit", "weight": 20, "minPlayers": 2 },
-    { "itemId": "2-J", "name": "Art Deco Circlets", "floor": "Second Exhibit", "weight": 10, "minPlayers": 2 },
-    { "itemId": "2-K", "name": "Venus d'Algernon", "floor": "Second Exhibit", "weight": 30, "minPlayers": 2 },
+    { "itemId": "2-E", "name": "The Great Circle Back", "floor": "Crisp Gallery", "weight": 50, "minPlayers": 2 },
+    { "itemId": "2-F", "name": "Don't Forgo These Blueprints", "floor": "Crisp Gallery", "weight": 50, "minPlayers": 2 },
+    { "itemId": "2-G", "name": "Fertility Statue", "floor": "Crisp Gallery", "weight": 20, "minPlayers": 2 },
+    { "itemId": "2-H", "name": "Gemstone", "floor": "Crisp Gallery", "weight": 30, "minPlayers": 2 },
+    { "itemId": "2-I", "name": "Meteorite Fragment", "floor": "Crisp Gallery", "weight": 20, "minPlayers": 2 },
+    { "itemId": "2-J", "name": "Art Deco Circlets", "floor": "Crisp Gallery", "weight": 10, "minPlayers": 2 },
+    { "itemId": "2-K", "name": "Venus d'Algernon", "floor": "Crisp Gallery", "weight": 30, "minPlayers": 2 },
     { "itemId": "2-L", "name": "Cooked", "floor": "Second", "weight": 50, "minPlayers": 1 },
     { "itemId": "2-M", "name": "Sod Off", "floor": "Second", "weight": 50, "minPlayers": 1 }
   ]
