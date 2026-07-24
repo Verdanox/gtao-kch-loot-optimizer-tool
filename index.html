@@ -18,6 +18,7 @@
   --warn:#d9694f;
   --text:#e9e6dd;
   --muted:#8b93a0;
+  --panel-3:#2e374a;
   --mono: 'IBM Plex Mono', monospace;
   --display: 'Oswald', sans-serif;
   --body: 'Inter', sans-serif;
@@ -180,35 +181,49 @@ select:focus, input:focus{border-color:var(--gold);}
   display:flex; align-items:center; justify-content:center; height:100%;
 }
 
-.loot-list{display:flex; flex-direction:column; gap:18px;}
+.loot-list{display:flex; flex-direction:column; gap:12px;}
 .loot-floor-heading{
   font-family:var(--mono); font-size:11px; color:var(--muted);
-  text-transform:uppercase; letter-spacing:.08em; margin:0 0 8px;
+  text-transform:uppercase; letter-spacing:.08em; margin:0 0 5px;
 }
-.loot-floor-group{display:flex; flex-direction:column; gap:10px;}
-.loot-row{
+.floor-note{
+  font-family:var(--mono); font-size:10.5px; color:var(--gold);
+  margin:0 0 6px; line-height:1.5;
+}
+.loot-floor-group{
+  display:flex; flex-direction:column;
+  border:1px solid var(--line);
+  background:var(--panel);
+  padding:10px 12px 12px;
+}
+.loot-items{display:flex; flex-direction:column; gap:5px;}
+.loot-item{
   border:1px solid var(--line);
   background:var(--panel-2);
-  padding:12px;
-  display:grid;
-  grid-template-columns: 1.6fr 0.9fr auto;
-  gap:10px;
-  align-items:center;
+  padding:6px 9px;
+  display:flex; flex-direction:row; align-items:center; gap:7px;
 }
-.loot-row.ineligible{opacity:.45;}
-.loot-name{font-size:14px; color:var(--text);}
-@media (max-width:640px){
-  .loot-row{grid-template-columns:1fr 1fr; grid-template-areas:"name name" "val bc";}
-  .loot-row .loot-name{grid-area:name;}
-  .loot-row input[data-f="val"]{grid-area:val;}
-  .loot-row .bc-wrap{grid-area:bc;}
+.loot-item.chk-b{background:var(--panel-3);}
+.loot-item.bc-active{background:rgba(201,162,75,0.16); border-color:var(--gold-dim);}
+.loot-item.bc-active .loot-name{color:var(--gold);}
+.loot-name{flex:1; min-width:0; font-size:12.5px; line-height:1.3; color:var(--text);}
+.item-controls{display:flex; align-items:center; gap:6px; flex:0 0 auto;}
+.item-controls input[type="number"]{
+  flex:0 0 auto; width:88px;
+  font-size:11.5px;
+  padding:5px 6px;
+  -moz-appearance:textfield;
 }
-.bc-wrap{display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; color:var(--muted); white-space:nowrap;}
+.item-controls input[type="number"]::-webkit-outer-spin-button,
+.item-controls input[type="number"]::-webkit-inner-spin-button{
+  -webkit-appearance:none;
+  margin:0;
+}
+.bc-wrap{display:flex; align-items:center; gap:3px; font-family:var(--mono); font-size:10px; color:var(--muted); white-space:nowrap; cursor:help;}
 .bc-wrap input{width:auto;}
 .bc-wrap.locked{opacity:.4;}
-.req2{font-size:9px; color:var(--gold); display:block; margin-top:2px;}
 
-.hint{font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:10px; line-height:1.6;}
+.hint{font-family:var(--mono); font-size:11px; color:var(--muted); margin:10px 0 14px; line-height:1.6;}
 .hint b{color:var(--gold);}
 
 /* Results */
@@ -268,6 +283,8 @@ select:focus, input:focus{border-color:var(--gold);}
   font-family:var(--mono); font-size:12px; color:var(--gold);
   text-transform:uppercase; letter-spacing:.06em; margin:0 0 8px;
 }
+.player-card .loot-floor-heading{margin-top:8px;}
+.player-card .loot-floor-heading:first-of-type{margin-top:0;}
 .player-card .ledger-row{font-size:13px; padding:6px 0;}
 .player-card .ledger-row.total{margin-top:6px; padding-top:10px;}
 .player-card .ledger-row.total .v{font-size:18px;}
@@ -347,8 +364,8 @@ select:focus, input:focus{border-color:var(--gold);}
   <div class="step">
     <span class="step-num">3</span><span class="step-title">Scoped Secondary Loot</span>
     <div class="step-body">
-      <div class="loot-list" id="lootList"></div>
       <p class="hint">Every scoutable item is listed below, grouped by the floor you'll find it on. Fill in the value for whatever you actually photographed and leave the rest blank. Mark up to <b>three</b> (fewer is fine) as the Buyer's Choice — these only affect bag packing once the Elite Challenge (Step 4) is turned on. With Elite off, the ledger just optimizes for maximum bag value regardless of these picks.</p>
+      <div class="loot-list" id="lootList"></div>
     </div>
   </div>
 
@@ -529,6 +546,9 @@ function renderLootList(){
   const floors = [...new Set(LOOT_CATALOG.map(i => i.floor))];
 
   floors.forEach(floor => {
+    const floorItems = LOOT_CATALOG.filter(c => c.floor === floor);
+    const floorMinPlayers = Math.max(...floorItems.map(i => i.minPlayers));
+
     const group = document.createElement('div');
     group.className = 'loot-floor-group';
     const heading = document.createElement('p');
@@ -536,17 +556,31 @@ function renderLootList(){
     heading.textContent = floor;
     group.appendChild(heading);
 
-    LOOT_CATALOG.filter(c => c.floor === floor).forEach(cat => {
+    if (floorMinPlayers > state.players){
+      const note = document.createElement('p');
+      note.className = 'floor-note';
+      note.textContent = `Needs ${floorMinPlayers}+ players to access — entries and Buyer's Choice picks here won't count until your crew meets that.`;
+      group.appendChild(note);
+    }
+
+    const itemsWrap = document.createElement('div');
+    itemsWrap.className = 'loot-items';
+
+    floorItems.forEach((cat, idx) => {
       const item = state.loot.find(l => l.itemId === cat.itemId);
       const row = document.createElement('div');
-      row.className = 'loot-row';
-      const eligible = cat.minPlayers <= state.players;
-      if (!eligible) row.classList.add('ineligible');
+      row.className = 'loot-item';
+      if (idx % 2 === 1) row.classList.add('chk-b');
+      if (item.buyersChoice) row.classList.add('bc-active');
 
       // name
       const nameEl = document.createElement('div');
       nameEl.className = 'loot-name';
       nameEl.textContent = cat.name;
+
+      // controls
+      const controls = document.createElement('div');
+      controls.className = 'item-controls';
 
       // value
       const valInput = document.createElement('input');
@@ -557,24 +591,28 @@ function renderLootList(){
       // buyer's choice checkbox
       const bcWrap = document.createElement('label');
       bcWrap.className = 'bc-wrap';
+      bcWrap.title = "Buyer's Choice";
       const maxedOut = bcCount >= 3 && !item.buyersChoice;
-      if (!eligible || maxedOut) bcWrap.classList.add('locked');
+      if (maxedOut) bcWrap.classList.add('locked');
       const bcCheck = document.createElement('input');
       bcCheck.type = 'checkbox';
       bcCheck.checked = item.buyersChoice;
-      bcCheck.disabled = !eligible || maxedOut;
+      bcCheck.disabled = maxedOut;
       bcCheck.addEventListener('change', e => { item.buyersChoice = e.target.checked; renderAll(); });
       bcWrap.appendChild(bcCheck);
       const bcText = document.createElement('span');
-      bcText.innerHTML = "Buyer's Choice" + (!eligible ? '<span class="req2"> needs 2P</span>' : '');
+      bcText.textContent = 'BC';
       bcWrap.appendChild(bcText);
 
+      controls.appendChild(valInput);
+      controls.appendChild(bcWrap);
+
       row.appendChild(nameEl);
-      row.appendChild(valInput);
-      row.appendChild(bcWrap);
-      group.appendChild(row);
+      row.appendChild(controls);
+      itemsWrap.appendChild(row);
     });
 
+    group.appendChild(itemsWrap);
     container.appendChild(group);
   });
 }
@@ -754,13 +792,24 @@ function renderResults(){
       empty.textContent = 'No items in this bag.';
       card.appendChild(empty);
     } else {
-      bag.items.forEach(it => {
-        const cat = itemById(it.itemId);
-        const isBC = r.bcIdsSet.has(it.itemId);
-        const div = document.createElement('div');
-        div.className = 'manifest-item';
-        div.innerHTML = `<span class="name">${cat.name}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(it.value)}</span>`;
-        card.appendChild(div);
+      const floorOrder = [...new Set(LOOT_CATALOG.map(i => i.floor))];
+      floorOrder.forEach(floor => {
+        const floorItems = bag.items.filter(it => itemById(it.itemId).floor === floor);
+        if (floorItems.length === 0) return;
+
+        const floorHeading = document.createElement('p');
+        floorHeading.className = 'loot-floor-heading';
+        floorHeading.textContent = floor;
+        card.appendChild(floorHeading);
+
+        floorItems.forEach(it => {
+          const cat = itemById(it.itemId);
+          const isBC = r.bcIdsSet.has(it.itemId);
+          const div = document.createElement('div');
+          div.className = 'manifest-item';
+          div.innerHTML = `<span class="name">${cat.name}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(it.value)}</span>`;
+          card.appendChild(div);
+        });
       });
     }
 
