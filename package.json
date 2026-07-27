@@ -1,0 +1,13 @@
+{
+  "name": "kch-loot-ledger",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dev-only tooling for the Kortz Center Loot Ledger. Never shipped — GitHub Pages serves index.html/guide.html/js/data as static files.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

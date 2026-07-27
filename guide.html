@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kortz Center — Heist Guide</title>
+<link rel="stylesheet" href="css/kch-styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <p class="eyebrow">Case File · Kortz Center Heist</p>
+    <h1>Heist Guide</h1>
+    <p class="sub">One-stop reference for the run: who carries what, and where to find it. Screenshot this or keep it open on a second screen.</p>
+  </div>
+
+  <div class="warn-box" id="prepWarnBox" style="display:none; margin:0 0 16px;"></div>
+
+  <!-- SECURITY COMBO + LOCK (top — needed live, filled in post-prep) -->
+  <div class="step">
+    <span class="step-num">§</span><span class="step-title">Security Door Combination</span>
+    <div class="step-body">
+      <label class="field-label">Deactivation combo (from the prep mission)</label>
+      <div class="combo-row">
+        <input type="text" id="securityCombo" placeholder="Not known yet — fill in after prep">
+        <button type="button" id="comboLockBtn" class="lock-btn">Lock</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTIMIZED BAGS (promoted — the "who grabs what" info) -->
+  <div class="results" id="bagResults">
+    <div class="results-head">
+      <span class="t">Optimized Bags</span>
+      <span class="stamp" id="statusStamp">Feasible</span>
+    </div>
+    <div class="warn-box" id="warnBox" style="display:none;"></div>
+    <div class="ledger" id="bagLedger"></div>
+    <div class="bag-manifest" style="padding-top:0;">
+      <p class="manifest-title" style="margin-top:0;">Bag Capacity</p>
+      <div class="bag-gauges" id="bagGauges"></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <span class="step-num">§</span><span class="step-title">Who Grabs What</span>
+    <div class="step-body" id="itemsList"></div>
+  </div>
+
+  <!-- FINALE RESULT / PAYOUT (demoted) -->
+  <div class="results" id="totalsResults">
+    <div class="results-head">
+      <span class="t">Finale Result</span>
+    </div>
+    <div class="ledger" id="totalsLedger"></div>
+  </div>
+
+  <div class="step">
+    <span class="step-num">§</span><span class="step-title">Payout by Player</span>
+    <div class="step-body" id="payoutList"></div>
+  </div>
+
+  <div class="no-print" style="text-align:center; margin-top:20px;">
+    <a href="index.html" class="back-link">← Back to Edit</a>
+  </div>
+
+  <p class="footnote">Kortz Center Heist released July 14, 2026. Primary Target payouts, the +10% Hard Mode modifier, the Buyer's Request bonus ($50,000 Normal / $100,000 Hard), the Elite Challenge bonus ($50,000 Normal / $100,000 Hard, per player) and the $100,000 repeat-run planning fee reflect publicly reported figures and may shift with balance updates. The Elite Challenge bonus is never projected here — its success depends on live-execution conditions (the 17-minute clock, etc.) this tool doesn't model.</p>
+
+</div>
+
+<script type="module">
+import {
+  itemById, money, calcPrimary, runOptimizer, computeGuideTake, packedPrepWarnings,
+  defaultPage1State, defaultPage2State, serializeState, deserializeState, mergeLootByItemId,
+  DEFAULT_BONUS_CONSTANTS, STORAGE_KEY
+} from './js/kch-model.js';
+
+// Prep slug -> display label. Only "glass-cutter" exists today; this map
+// is presentation-only (kch-model.js stays free of display concerns).
+const PREP_LABELS = { 'glass-cutter': 'Glass Cutter' };
+function prepLabel(slug) { return PREP_LABELS[slug] || slug; }
+
+// ---------- DATA ----------
+let PRIMARY_TARGETS = [];
+let PRIMARY_MULTIPLIERS = { hard: 1.10, firstWeek: 4.00 };
+let LOOT_CATALOG = [];
+let BAG_CAPACITY_PER_PLAYER = 100;
+
+// Floor -> slug lookup for the floor-color accent below. Presentation-only
+// concern (kch-model.js stays pure logic, no display mapping) — reuses the
+// exact slugs already reserved in internal/requirements.md for the future
+// per-floor map assets (assets/floors/<slug>.png), so this doesn't need
+// reconciling twice when that ships.
+const FLOOR_SLUGS = {
+  'Vault': 'vault',
+  'Loading Bay': 'loading-bay',
+  'Alarm Floor': 'alarm-floor',
+  'First': 'first',
+  'Second': 'second',
+  'Crisp Gallery': 'crisp-gallery'
+};
+function floorSlug(floor) {
+  return FLOOR_SLUGS[floor] || floor.toLowerCase().replace(/\s+/g, '-');
+}
+
+// ---------- STATE (hydrated from localStorage) ----------
+let state = null;
+let page2State = null;
+
+function loadPersisted(){
+  const defaults1 = defaultPage1State(LOOT_CATALOG);
+  const defaults2 = defaultPage2State();
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const { page1, page2 } = deserializeState(raw, defaults1, defaults2);
+  state = { ...page1, loot: mergeLootByItemId(LOOT_CATALOG, page1.loot) };
+  page2State = page2;
+}
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState(state, page2State)));
+}
+
+// r.overflow is true for TWO different reasons — a genuine bag-weight
+// overflow, or a Buyer's Choice item that's structurally unreachable for
+// this crew size (bcIneligibleIds non-empty). Only the first one actually
+// means "too much stuff in the bag." Every place that colors something
+// red/warn off overflow needs this same distinction, not just the status
+// stamp (round 5) — this is the shared check so a third call site doesn't
+// need rediscovering it independently.
+function isGenuineOverflow(r){
+  return r.overflow && r.bcIneligibleIds.length === 0;
+}
+
+// ---------- RENDER: shared bits ----------
+function renderBagGauges(bags, genuineOverflow){
+  const el = document.getElementById('bagGauges');
+  el.innerHTML = '';
+  for (let i = 0; i < state.players; i++){
+    const pct = Math.min(100, (bags[i].weightUsed / BAG_CAPACITY_PER_PLAYER) * 100);
+    const bag = document.createElement('div');
+    bag.className = 'bag';
+    const fill = document.createElement('div');
+    fill.className = 'fill' + (genuineOverflow ? ' over' : '');
+    fill.style.width = pct.toFixed(0) + '%';
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.textContent = 'P' + (i + 1);
+    bag.appendChild(fill);
+    bag.appendChild(tag);
+    el.appendChild(bag);
+  }
+}
+
+function playerLabel(i){
+  const name = (state.playerNames && state.playerNames[i]) ? state.playerNames[i].trim() : '';
+  const base = i === 0 ? 'Host (P1)' : `Player ${i + 1}`;
+  return name ? `${name} — ${base}` : base;
+}
+
+function addLedgerRow(container, k, v, extraClass){
+  const row = document.createElement('div');
+  row.className = 'ledger-row' + (extraClass ? ' ' + extraClass : '');
+  row.innerHTML = `<span class="k">${k}</span><span class="v${v.toString().startsWith('-') ? ' neg' : ''}">${v}</span>`;
+  container.appendChild(row);
+}
+
+// Reminder-only banner (not gating): warns if any *packed* item needs a
+// prep mission the optimizer has no way to know was actually done. Names
+// only the specific items present this run, not a generic catch-all.
+function renderPrepWarning(r){
+  const box = document.getElementById('prepWarnBox');
+  const flagged = packedPrepWarnings(LOOT_CATALOG, r.chosenIds);
+  if (flagged.length === 0){
+    box.style.display = 'none';
+    return;
+  }
+  const names = flagged.map(cat => cat.name).join(', ');
+  const label = prepLabel(flagged[0].requiresPreps[0]);
+  box.style.display = 'block';
+  box.textContent = `Heads up: your optimized loot includes items that need the ${label} prep — make sure it's done before this run: ${names}`;
+}
+
+// ---------- RENDER: promoted "Optimized Bags" section ----------
+function renderBagSection(r){
+  renderBagGauges(r.bags, isGenuineOverflow(r));
+
+  // Same three-way distinction the warn-box below already makes: overflow
+  // has two different causes, and only one of them is actually a weight
+  // problem. A Buyer's Choice item that's structurally unreachable for
+  // this crew size (bcIneligibleIds) isn't "Overweight" — nothing's too
+  // heavy, it's just inaccessible — so it gets its own label while still
+  // keeping the warning styling (still worth flagging, just not as a
+  // weight problem).
+  const stamp = document.getElementById('statusStamp');
+  if (!r.overflow){
+    stamp.textContent = 'Feasible'; stamp.classList.remove('warn');
+  } else if (isGenuineOverflow(r)){
+    stamp.textContent = 'Overweight'; stamp.classList.add('warn');
+  } else {
+    stamp.textContent = 'Elite Unreachable'; stamp.classList.add('warn');
+  }
+
+  // The warn-box itself still appears for BOTH overflow reasons (both are
+  // "worth flagging" — bonuses are forfeited either way) with its one
+  // fixed warning-colored chrome; only its *text* needs to distinguish the
+  // reason, which it already does below. No genuineOverflow gating here.
+  const warnBox = document.getElementById('warnBox');
+  if (r.overflow){
+    warnBox.style.display = 'block';
+    if (r.bcIneligibleIds.length > 0){
+      const names = r.bcIneligibleIds.map(id => itemById(LOOT_CATALOG, id).name).join(', ');
+      const plural = r.bcIneligibleIds.length > 1;
+      warnBox.textContent = `${names} ${plural ? 'are' : 'is'} marked Buyer's Choice but need${plural ? '' : 's'} more players than your crew (${state.players}) to even reach. Buyer's Request and Elite Challenge bonuses are forfeited.`;
+    } else {
+      warnBox.textContent = `Your Buyer's Choice picks don't all fit in your crew's bags (need ${(r.mandatoryWeightSum / BAG_CAPACITY_PER_PLAYER).toFixed(2)} bags, have ${state.players.toFixed(2)}). The guide packed the best-value subset it could, but the Buyer's Request and Elite Challenge bonuses are forfeited. Drop an item or bring another player.`;
+    }
+  } else {
+    warnBox.style.display = 'none';
+  }
+
+  const bagLedger = document.getElementById('bagLedger');
+  bagLedger.innerHTML = '';
+  addLedgerRow(bagLedger, 'Secondary Targets (optimized bag)', money(r.secondaryBagValue), 'total');
+}
+
+// ---------- RENDER: "Who Grabs What" — items only, floor color-coded ----------
+function renderItemsList(r){
+  const container = document.getElementById('itemsList');
+  container.innerHTML = '';
+
+  for (let i = 0; i < state.players; i++){
+    const bag = r.bags[i];
+    const card = document.createElement('div');
+    card.className = `player-card p-color-${i}`;
+
+    const head = document.createElement('p');
+    head.className = 'player-card-head';
+    head.innerHTML = `<span class="dot"></span><span>${playerLabel(i)}</span>`;
+    card.appendChild(head);
+
+    if (bag.items.length === 0){
+      const empty = document.createElement('p');
+      empty.className = 'manifest-empty';
+      empty.textContent = 'No items in this bag.';
+      card.appendChild(empty);
+    } else {
+      const floorOrder = [...new Set(LOOT_CATALOG.map(it => it.floor))];
+      floorOrder.forEach(floor => {
+        const floorItems = bag.items.filter(it => itemById(LOOT_CATALOG, it.itemId).floor === floor);
+        if (floorItems.length === 0) return;
+
+        const floorHeading = document.createElement('p');
+        floorHeading.className = 'loot-floor-heading';
+        floorHeading.textContent = floor;
+        card.appendChild(floorHeading);
+
+        floorItems.forEach(it => {
+          const cat = itemById(LOOT_CATALOG, it.itemId);
+          const isBC = r.bcIdsSet.has(it.itemId);
+          const div = document.createElement('div');
+          div.className = 'manifest-item';
+          div.dataset.floor = floorSlug(floor);
+          div.innerHTML = `<span class="name">${cat.name}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(it.value)}</span>`;
+          card.appendChild(div);
+        });
+      });
+    }
+
+    container.appendChild(card);
+  }
+
+  if (r.ineligibleCount > 0){
+    const note = document.createElement('p');
+    note.className = 'hint';
+    note.style.marginTop = '10px';
+    note.textContent = `${r.ineligibleCount} item(s) excluded — they need more players than your current crew size.`;
+    container.appendChild(note);
+  }
+}
+
+// ---------- RENDER: demoted "Finale Result" / payout section ----------
+function renderPayoutSection(primary, r){
+  const ledger = document.getElementById('totalsLedger');
+  ledger.innerHTML = '';
+
+  addLedgerRow(ledger, 'Primary Target', money(primary.value));
+  addLedgerRow(ledger, 'Secondary Targets (optimized bag)', money(r.secondaryBagValue));
+  // "Total Take (Career Progress)" (primary.value + r.secondaryBagValue)
+  // was removed 2026-07-26: secondaryBagValue is the crew-wide combined
+  // bag total, but the PM confirmed career progress is tracked
+  // per-player/per-bag in-game — the line showed a number that didn't
+  // represent anyone's actual progress. A correct per-player replacement
+  // is deferred to a later round; for now just don't show a wrong one.
+
+  const extrasLabel = document.createElement('p');
+  extrasLabel.className = 'manifest-title';
+  extrasLabel.style.marginTop = '14px';
+  extrasLabel.textContent = 'Bonuses & Fees';
+  ledger.appendChild(extrasLabel);
+
+  addLedgerRow(ledger, "Buyer's Request bonus", r.buyerRequestBonusEach ? `${money(r.buyerRequestBonusEach)} / player` : (r.attempted ? '— not earned' : '— not attempted'));
+  if (r.attempted){
+    addLedgerRow(ledger, 'Elite Challenge', 'Attempted — bonus not projected here (depends on live execution)');
+  }
+  if (r.planningFee > 0) addLedgerRow(ledger, 'Repeat-run planning fee (host only)', money(-r.planningFee));
+
+  // payout by player
+  const payout = document.getElementById('payoutList');
+  payout.innerHTML = '';
+
+  for (let i = 0; i < state.players; i++){
+    const isHost = i === 0;
+    const bag = r.bags[i];
+    const card = document.createElement('div');
+    card.className = `player-card p-color-${i}`;
+
+    const head = document.createElement('p');
+    head.className = 'player-card-head';
+    head.innerHTML = `<span class="dot"></span><span>${playerLabel(i)}</span>`;
+    card.appendChild(head);
+
+    if (isHost){
+      const primaryRow = document.createElement('div');
+      primaryRow.className = 'ledger-row';
+      primaryRow.innerHTML = `<span class="k">Primary Target</span><span class="v">${money(primary.value)}</span>`;
+      card.appendChild(primaryRow);
+    }
+
+    const bagRow = document.createElement('div');
+    bagRow.className = 'ledger-row';
+    bagRow.innerHTML = `<span class="k">Bag value</span><span class="v">${money(bag.value)}</span>`;
+    card.appendChild(bagRow);
+
+    if (r.buyerRequestBonusEach > 0){
+      const bonusRow = document.createElement('div');
+      bonusRow.className = 'ledger-row';
+      bonusRow.innerHTML = `<span class="k">Buyer's Request bonus</span><span class="v">${money(r.buyerRequestBonusEach)}</span>`;
+      card.appendChild(bonusRow);
+    }
+    if (isHost && r.planningFee > 0){
+      const feeRow = document.createElement('div');
+      feeRow.className = 'ledger-row';
+      feeRow.innerHTML = `<span class="k">Repeat-run planning fee</span><span class="v neg">${money(-r.planningFee)}</span>`;
+      card.appendChild(feeRow);
+    }
+
+    // Page 2's Take intentionally excludes the Elite Challenge bonus — see
+    // computeGuideTake() in js/kch-model.js for why.
+    const take = computeGuideTake({
+      bagValue: bag.value,
+      isHost,
+      primaryValue: primary.value,
+      planningFee: r.planningFee,
+      buyerRequestBonusEach: r.buyerRequestBonusEach
+    });
+    const totalRow = document.createElement('div');
+    totalRow.className = 'ledger-row total';
+    totalRow.innerHTML = `<span class="k">Take</span><span class="v">${money(take)}</span>`;
+    card.appendChild(totalRow);
+
+    payout.appendChild(card);
+  }
+}
+
+function renderGuide(){
+  const primary = calcPrimary(state, PRIMARY_TARGETS, PRIMARY_MULTIPLIERS);
+  const r = runOptimizer(state, LOOT_CATALOG, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+
+  renderPrepWarning(r);
+  renderBagSection(r);
+  renderItemsList(r);
+  renderPayoutSection(primary, r);
+}
+
+function wireSecurityCombo(){
+  const input = document.getElementById('securityCombo');
+  const lockBtn = document.getElementById('comboLockBtn');
+
+  function syncLockUI(){
+    input.readOnly = !!page2State.locked;
+    lockBtn.textContent = page2State.locked ? 'Unlock to edit' : 'Lock';
+    lockBtn.classList.toggle('locked', !!page2State.locked);
+  }
+
+  input.value = page2State.securityCombo || '';
+  syncLockUI();
+
+  input.addEventListener('input', e => {
+    page2State.securityCombo = e.target.value;
+    saveState();
+  });
+  lockBtn.addEventListener('click', () => {
+    // Reversible fat-finger guard, not a security boundary — no confirm
+    // dialog. readonly (not disabled) keeps the field selectable/copyable
+    // and in the tab order while locked.
+    page2State.locked = !page2State.locked;
+    syncLockUI();
+    saveState();
+  });
+}
+
+async function init(){
+  try {
+    const [primaryRes, lootRes] = await Promise.all([
+      fetch('data/primary-targets.json'),
+      fetch('data/secondary-loot.json')
+    ]);
+    const primaryData = await primaryRes.json();
+    const lootData = await lootRes.json();
+
+    PRIMARY_TARGETS = primaryData.targets.slice().sort((a, b) => a.name.localeCompare(b.name));
+    PRIMARY_MULTIPLIERS = primaryData.multipliers;
+    LOOT_CATALOG = lootData.items;
+    BAG_CAPACITY_PER_PLAYER = lootData.bagCapacityPerPlayer;
+
+    loadPersisted();
+
+    wireSecurityCombo();
+    renderGuide();
+  } catch (err) {
+    document.getElementById('bagLedger').innerHTML =
+      `<p class="hint" style="color:var(--warn);">Failed to load loot data (${err.message}). Serve this folder over HTTP (not file://) and reload.</p>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

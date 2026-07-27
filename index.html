@@ -3,311 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kortz Center — Loot Ledger</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
-
-:root{
-  --bg:#12151a;
-  --panel:#191e26;
-  --panel-2:#1f2530;
-  --line:#2b323d;
-  --gold:#c9a24b;
-  --gold-dim:#8a7038;
-  --teal:#49c8b8;
-  --warn:#d9694f;
-  --text:#e9e6dd;
-  --muted:#8b93a0;
-  --panel-3:#2e374a;
-  --mono: 'IBM Plex Mono', monospace;
-  --display: 'Oswald', sans-serif;
-  --body: 'Inter', sans-serif;
-}
-*{box-sizing:border-box;}
-html,body{margin:0;padding:0;}
-body{
-  background:
-    linear-gradient(var(--bg), var(--bg)),
-    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(201,162,75,0.03) 40px),
-    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(201,162,75,0.03) 40px);
-  color:var(--text);
-  font-family:var(--body);
-  min-height:100vh;
-  padding:28px 16px 60px;
-}
-.wrap{max-width:760px;margin:0 auto;}
-
-.header{
-  border:1px solid var(--line);
-  background:var(--panel);
-  padding:22px 24px;
-  margin-bottom:22px;
-  position:relative;
-  overflow:hidden;
-}
-.header::before{
-  content:"";
-  position:absolute; top:0; left:0; right:0; height:3px;
-  background:linear-gradient(90deg, var(--gold), transparent 70%);
-}
-.eyebrow{
-  font-family:var(--mono);
-  font-size:11px;
-  letter-spacing:.18em;
-  color:var(--gold);
-  text-transform:uppercase;
-  margin:0 0 6px;
-}
-h1{
-  font-family:var(--display);
-  font-weight:600;
-  font-size:30px;
-  letter-spacing:.01em;
-  margin:0 0 6px;
-  text-transform:uppercase;
-}
-.sub{color:var(--muted); font-size:14px; margin:0; max-width:56ch; line-height:1.5;}
-
-.step{
-  border:1px solid var(--line);
-  background:var(--panel);
-  margin-bottom:16px;
-  padding:20px 22px;
-  position:relative;
-}
-.step-num{
-  font-family:var(--mono);
-  font-size:12px;
-  color:var(--bg);
-  background:var(--gold);
-  width:26px;height:26px;
-  display:inline-flex;align-items:center;justify-content:center;
-  font-weight:600;
-  margin-right:10px;
-  vertical-align:middle;
-}
-.step-title{
-  font-family:var(--display);
-  font-size:16px;
-  letter-spacing:.04em;
-  text-transform:uppercase;
-  vertical-align:middle;
-  color:var(--text);
-}
-.step-body{margin-top:16px;}
-
-label.field-label{
-  display:block;
-  font-family:var(--mono);
-  font-size:11px;
-  letter-spacing:.08em;
-  color:var(--muted);
-  text-transform:uppercase;
-  margin-bottom:6px;
-}
-select, input[type="text"], input[type="number"]{
-  width:100%;
-  background:var(--panel-2);
-  border:1px solid var(--line);
-  color:var(--text);
-  font-family:var(--body);
-  font-size:14px;
-  padding:9px 10px;
-  outline:none;
-}
-select:focus, input:focus{border-color:var(--gold);}
-.row2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
-.row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;}
-@media (max-width:560px){ .row3{grid-template-columns:1fr;} .row2{grid-template-columns:1fr;} }
-
-.toggle-group{display:flex; gap:8px; flex-wrap:wrap;}
-.toggle-btn{
-  flex:1;
-  min-width:90px;
-  background:var(--panel-2);
-  border:1px solid var(--line);
-  color:var(--muted);
-  font-family:var(--mono);
-  font-size:12px;
-  letter-spacing:.05em;
-  text-transform:uppercase;
-  padding:10px 8px;
-  cursor:pointer;
-  text-align:center;
-  transition:all .12s ease;
-}
-.toggle-btn:hover{border-color:var(--gold-dim);}
-.toggle-btn.active{
-  background:var(--gold);
-  border-color:var(--gold);
-  color:var(--bg);
-  font-weight:600;
-}
-
-.crew-select{display:flex; gap:8px;}
-.crew-opt{
-  flex:1;
-  border:1px solid var(--line);
-  background:var(--panel-2);
-  padding:14px 4px;
-  text-align:center;
-  cursor:pointer;
-  font-family:var(--mono);
-}
-.crew-opt .n{font-size:20px; font-weight:600; color:var(--text); display:block;}
-.crew-opt .lbl{font-size:10px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase;}
-.crew-opt.active{border-color:var(--teal); background:rgba(73,200,184,0.1);}
-.crew-opt.active .n{color:var(--teal);}
-
-.bag-gauges{display:flex; gap:6px; margin-top:14px;}
-.bag{
-  flex:1;
-  height:34px;
-  border:1px solid var(--line);
-  background:var(--panel-2);
-  position:relative;
-  overflow:hidden;
-}
-.bag .fill{
-  position:absolute; left:0; top:0; bottom:0;
-  background:var(--teal);
-  width:0%;
-  transition:width .2s ease, background .2s ease;
-}
-.bag .fill.over{background:var(--warn);}
-.bag .tag{
-  position:relative; z-index:1;
-  font-family:var(--mono); font-size:10px; color:var(--muted);
-  display:flex; align-items:center; justify-content:center; height:100%;
-}
-
-.loot-list{display:flex; flex-direction:column; gap:12px;}
-.loot-floor-heading{
-  font-family:var(--mono); font-size:11px; color:var(--muted);
-  text-transform:uppercase; letter-spacing:.08em; margin:0 0 5px;
-}
-.floor-note{
-  font-family:var(--mono); font-size:10.5px; color:var(--gold);
-  margin:0 0 6px; line-height:1.5;
-}
-.loot-floor-group{
-  display:flex; flex-direction:column;
-  border:1px solid var(--line);
-  background:var(--panel);
-  padding:10px 12px 12px;
-}
-.loot-items{display:flex; flex-direction:column; gap:5px;}
-.loot-item{
-  border:1px solid var(--line);
-  background:var(--panel-2);
-  padding:6px 9px;
-  display:flex; flex-direction:row; align-items:center; gap:7px;
-}
-.loot-item.chk-b{background:var(--panel-3);}
-.loot-item.bc-active{background:rgba(201,162,75,0.16); border-color:var(--gold-dim);}
-.loot-item.bc-active .loot-name{color:var(--gold);}
-.loot-name{flex:1; min-width:0; font-size:12.5px; line-height:1.3; color:var(--text);}
-.item-controls{display:flex; align-items:center; gap:6px; flex:0 0 auto;}
-.item-controls input[type="number"]{
-  flex:0 0 auto; width:88px;
-  font-size:11.5px;
-  padding:5px 6px;
-  -moz-appearance:textfield;
-}
-.item-controls input[type="number"]::-webkit-outer-spin-button,
-.item-controls input[type="number"]::-webkit-inner-spin-button{
-  -webkit-appearance:none;
-  margin:0;
-}
-.bc-wrap{display:flex; align-items:center; gap:3px; font-family:var(--mono); font-size:10px; color:var(--muted); white-space:nowrap; cursor:help;}
-.bc-wrap input{width:auto;}
-.bc-wrap.locked{opacity:.4;}
-
-.hint{font-family:var(--mono); font-size:11px; color:var(--muted); margin:10px 0 14px; line-height:1.6;}
-.hint b{color:var(--gold);}
-
-/* Results */
-.results{
-  border:1px solid var(--gold-dim);
-  background:var(--panel);
-  padding:0;
-  margin-top:20px;
-}
-.results-head{
-  background:var(--panel-2);
-  padding:14px 22px;
-  border-bottom:1px solid var(--line);
-  display:flex; justify-content:space-between; align-items:center;
-}
-.results-head .t{font-family:var(--display); text-transform:uppercase; letter-spacing:.05em; font-size:15px;}
-.results-head .stamp{
-  font-family:var(--mono); font-size:10px; color:var(--teal); border:1px solid var(--teal);
-  padding:3px 8px; letter-spacing:.08em; text-transform:uppercase;
-}
-.results-head .stamp.warn{color:var(--warn); border-color:var(--warn);}
-.ledger{padding:18px 22px;}
-.ledger-row{
-  display:flex; justify-content:space-between; align-items:baseline;
-  padding:8px 0; border-bottom:1px solid var(--line);
-  font-family:var(--mono); font-size:13px;
-}
-.ledger-row .k{color:var(--muted);}
-.ledger-row .v{color:var(--text); font-weight:500;}
-.ledger-row .v.neg{color:var(--warn);}
-.ledger-row.total{
-  border-bottom:none; border-top:1px solid var(--gold-dim);
-  margin-top:6px; padding-top:14px;
-}
-.ledger-row.total .k{color:var(--gold); font-size:14px; letter-spacing:.05em; text-transform:uppercase; font-family:var(--display);}
-.ledger-row.total .v{color:var(--gold); font-size:22px; font-weight:600; font-family:var(--display);}
-
-.bag-manifest{padding:0 22px 20px;}
-.manifest-title{font-family:var(--mono); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin:4px 0 10px;}
-.manifest-item{
-  display:flex; justify-content:space-between; font-size:13px; padding:6px 0;
-  border-bottom:1px solid var(--line);
-}
-.manifest-item .name{color:var(--text);}
-.manifest-item .name .flag{color:var(--gold); font-family:var(--mono); font-size:10px; margin-left:6px;}
-.manifest-item .val{font-family:var(--mono); color:var(--teal);}
-.manifest-empty{color:var(--muted); font-size:12px; font-style:italic; padding:6px 0;}
-
-.player-card{
-  border:1px solid var(--line);
-  background:var(--panel);
-  padding:14px 16px;
-  margin-bottom:12px;
-}
-.player-card:last-child{margin-bottom:0;}
-.player-card-head{
-  font-family:var(--mono); font-size:12px; color:var(--gold);
-  text-transform:uppercase; letter-spacing:.06em; margin:0 0 8px;
-}
-.player-card .loot-floor-heading{margin-top:8px;}
-.player-card .loot-floor-heading:first-of-type{margin-top:0;}
-.player-card .ledger-row{font-size:13px; padding:6px 0;}
-.player-card .ledger-row.total{margin-top:6px; padding-top:10px;}
-.player-card .ledger-row.total .v{font-size:18px;}
-
-.warn-box{
-  margin:0 22px 18px; padding:10px 12px;
-  border:1px solid var(--warn); background:rgba(217,105,79,0.08);
-  font-family:var(--mono); font-size:12px; color:var(--warn); line-height:1.6;
-}
-
-.footnote{
-  font-family:var(--mono); font-size:10px; color:var(--muted); text-align:center;
-  margin-top:26px; line-height:1.8; opacity:.7;
-}
-</style>
+<title>Kortz Center — Loot Ledger — Scope &amp; Setup</title>
+<link rel="stylesheet" href="css/kch-styles.css">
 </head>
 <body>
 <div class="wrap">
 
   <div class="header">
     <p class="eyebrow">Case File · Kortz Center Heist</p>
-    <h1>Loot Ledger</h1>
-    <p class="sub">Work out the highest-paying bag loadout for your crew. Scope your secondary targets, set your crew and difficulty, then let the ledger figure out what actually fits in your bags.</p>
+    <h1>Loot Ledger — Scope &amp; Setup</h1>
+    <p class="sub">Scope your secondary targets, set your crew and difficulty, then submit to generate your Heist Guide. Everything here autosaves as you go — refresh, close the browser, or come back later and it'll still be here.</p>
   </div>
 
   <!-- STEP 1: Primary target -->
@@ -322,22 +27,16 @@ select:focus, input:focus{border-color:var(--gold);}
         <div>
           <label class="field-label">Difficulty</label>
           <div class="toggle-group" id="difficultyToggle">
-            <div class="toggle-btn active" data-val="normal">Normal</div>
+            <div class="toggle-btn" data-val="normal">Normal</div>
             <div class="toggle-btn" data-val="hard">Hard (+10%)</div>
           </div>
         </div>
       </div>
-      <div class="row2" style="margin-top:14px;">
-        <div>
-          <label class="field-label">Weekly status</label>
-          <div class="toggle-group" id="weeklyToggle">
-            <div class="toggle-btn active" data-val="first">First run this week</div>
-            <div class="toggle-btn" data-val="repeat">Repeat run</div>
-          </div>
-        </div>
-        <div>
-          <label class="field-label">Primary payout (this run)</label>
-          <div id="primaryValueDisplay" style="font-family:var(--mono); font-size:20px; color:var(--gold); padding-top:8px;">$0</div>
+      <div style="margin-top:14px;">
+        <label class="field-label">Weekly status</label>
+        <div class="toggle-group" id="weeklyToggle">
+          <div class="toggle-btn" data-val="first">First run this week</div>
+          <div class="toggle-btn" data-val="repeat">Repeat run</div>
         </div>
       </div>
       <p class="hint" id="primaryHint"></p>
@@ -355,7 +54,6 @@ select:focus, input:focus{border-color:var(--gold);}
         <div class="crew-opt" data-val="3"><span class="n">3</span><span class="lbl">Trio</span></div>
         <div class="crew-opt" data-val="4"><span class="n">4</span><span class="lbl">Full crew</span></div>
       </div>
-      <div class="bag-gauges" id="bagGauges"></div>
       <p class="hint" id="crewHint">Every player carries one bag. Small paintings eat about half a bag; jewelry and small artifacts take much less room. Some floors need at least two players to access.</p>
     </div>
   </div>
@@ -364,7 +62,7 @@ select:focus, input:focus{border-color:var(--gold);}
   <div class="step">
     <span class="step-num">3</span><span class="step-title">Scoped Secondary Loot</span>
     <div class="step-body">
-      <p class="hint">Every scoutable item is listed below, grouped by the floor you'll find it on. Fill in the value for whatever you actually photographed and leave the rest blank. Mark up to <b>three</b> (fewer is fine) as the Buyer's Choice — these only affect bag packing once the Elite Challenge (Step 4) is turned on. With Elite off, the ledger just optimizes for maximum bag value regardless of these picks.</p>
+      <p class="hint">Every scoutable item is listed below, grouped by the floor you'll find it on. Fill in the value for whatever you actually photographed and leave the rest blank. Mark up to <b>three</b> (fewer is fine) as the Buyer's Choice — these only affect bag packing once the Elite Challenge (Step 4) is turned on. With Elite off, the ledger just optimizes for maximum bag value regardless of these picks. The Delivery Truck Crate's true value can't be known until you actually take it, so it's a checkbox — check it if you grabbed it, and it locks in at the community-estimated value.</p>
       <div class="loot-list" id="lootList"></div>
     </div>
   </div>
@@ -375,116 +73,63 @@ select:focus, input:focus{border-color:var(--gold);}
     <div class="step-body">
       <label class="field-label">Going for the Elite Challenge?</label>
       <div class="toggle-group" id="eliteToggle" style="max-width:280px;">
-        <div class="toggle-btn active" data-val="no">No</div>
+        <div class="toggle-btn" data-val="no">No</div>
         <div class="toggle-btn" data-val="yes">Yes</div>
       </div>
-      <p class="hint">If yes, the ledger locks in your Buyer's Choice items first and unlocks the Buyer's Request bonus plus the per-player Elite bonus (both doubled on Hard mode) — but only if every marked Buyer's Choice item actually fits in the bags. If no, Buyer's Choice picks are ignored and the ledger packs purely for maximum bag value.</p>
+      <p class="hint">If yes, the ledger locks in your Buyer's Choice items first — the Buyer's Request and Elite Challenge bonuses are only in play if every marked item actually fits (and is reachable by your crew size). If no, Buyer's Choice picks are ignored for packing and the ledger optimizes purely for maximum bag value.</p>
     </div>
   </div>
 
-  <!-- RESULTS -->
-  <div class="results">
-    <div class="results-head">
-      <span class="t">Finale Result</span>
-      <span class="stamp" id="statusStamp">Feasible</span>
+  <!-- STEP 5: Crew names -->
+  <div class="step">
+    <span class="step-num">5</span><span class="step-title">Crew Names (Optional)</span>
+    <div class="step-body">
+      <p class="hint">Label each player's card on the Heist Guide page. Leave any of these blank to just show "Player 1", "Player 2", etc. Player 1 is always the host.</p>
+      <div class="row2" id="playerNamesList"></div>
     </div>
-    <div class="warn-box" id="warnBox" style="display:none;"></div>
-    <div class="ledger" id="ledger"></div>
-    <div class="bag-manifest">
-      <p class="manifest-title">Payout by Player</p>
-      <div id="payoutList"></div>
-    </div>
+  </div>
+
+  <!-- SUBMIT -->
+  <div class="step" style="text-align:center;">
+    <button type="button" id="submitBtn" class="submit-btn">Continue to Heist Guide →</button>
+    <p class="hint" style="margin-top:12px; margin-bottom:0;">Your inputs are saved automatically — you can come back and edit anytime, even after submitting.</p>
   </div>
 
   <p class="footnote">Kortz Center Heist released July 14, 2026. Primary Target payouts, the +10% Hard Mode modifier, the Buyer's Request bonus ($50,000 Normal / $100,000 Hard), the Elite Challenge bonus ($50,000 Normal / $100,000 Hard, per player) and the $100,000 repeat-run planning fee reflect publicly reported figures and may shift with balance updates. Secondary Target dollar values are randomized per run — enter what you actually scoped. Bag-space weights match the reported per-player carrying limit of 100 units per bag.</p>
 
 </div>
 
-<script>
+<script type="module">
+import {
+  defaultPage1State, defaultPage2State,
+  serializeState, deserializeState, mergeLootByItemId,
+  STORAGE_KEY
+} from './js/kch-model.js';
+
 // ---------- DATA (loaded at runtime from data/*.json) ----------
 let PRIMARY_TARGETS = [];
-let PRIMARY_MULTIPLIERS = { hard: 1.10, firstWeek: 4.00 };
 let LOOT_CATALOG = [];
-let BAG_CAPACITY_PER_PLAYER = 100;
-
-const BUYER_REQUEST_BONUS_NORMAL = 50000;
-const BUYER_REQUEST_BONUS_HARD = 100000;
-const ELITE_BONUS_PER_PLAYER_NORMAL = 50000;
-const ELITE_BONUS_PER_PLAYER_HARD = 100000;
-const REPEAT_RUN_FEE = 100000;
 
 // ---------- STATE ----------
-let state = {
-  primaryId: 'la-derniere-debauche',
-  difficulty: 'normal',
-  weekly: 'first',
-  players: 1,
-  elite: 'no',
-  loot: [] // one entry per catalog item, seeded in init() once LOOT_CATALOG loads
-};
+let state = null;    // page1 fields + loot, hydrated from localStorage (or defaults)
+let page2State = null; // { securityCombo } — carried through unchanged from whatever's saved
 
-// ---------- HELPERS ----------
-function money(n){
-  const neg = n < 0;
-  n = Math.round(Math.abs(n));
-  return (neg? '-':'') + '$' + n.toLocaleString('en-US');
+// ---------- PERSISTENCE ----------
+function loadPersisted(){
+  const defaults1 = defaultPage1State(LOOT_CATALOG);
+  const defaults2 = defaultPage2State();
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const { page1, page2 } = deserializeState(raw, defaults1, defaults2);
+  state = { ...page1, loot: mergeLootByItemId(LOOT_CATALOG, page1.loot) };
+  page2State = page2;
 }
-function itemById(id){ return LOOT_CATALOG.find(i => i.itemId === id); }
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState(state, page2State)));
+}
+
 function buyersChoiceCount(){ return state.loot.filter(l => l.buyersChoice).length; }
-function bonusAmounts(){
-  const hard = state.difficulty === 'hard';
-  return {
-    buyerRequest: hard ? BUYER_REQUEST_BONUS_HARD : BUYER_REQUEST_BONUS_NORMAL,
-    elitePerPlayer: hard ? ELITE_BONUS_PER_PLAYER_HARD : ELITE_BONUS_PER_PLAYER_NORMAL
-  };
-}
 
-// 0/1 knapsack: items = [{id, value, weightUnits}], capacityUnits -> {value, chosenIds}
-function knapsack(items, capacityUnits){
-  const n = items.length;
-  if (n === 0 || capacityUnits <= 0) return { value: 0, chosenIds: [] };
-  const dp = Array.from({length:n+1}, () => new Array(capacityUnits+1).fill(0));
-  for (let i=1;i<=n;i++){
-    const it = items[i-1];
-    for (let c=0;c<=capacityUnits;c++){
-      dp[i][c] = dp[i-1][c];
-      if (it.weightUnits <= c){
-        const cand = dp[i-1][c-it.weightUnits] + it.value;
-        if (cand > dp[i][c]) dp[i][c] = cand;
-      }
-    }
-  }
-  // backtrack
-  let c = capacityUnits;
-  const chosen = [];
-  for (let i=n;i>=1;i--){
-    if (dp[i][c] !== dp[i-1][c]){
-      chosen.push(items[i-1].id);
-      c -= items[i-1].weightUnits;
-    }
-  }
-  return { value: dp[n][capacityUnits], chosenIds: chosen };
-}
-
-// First-Fit-Decreasing bin pack: distributes chosen items across `players`
-// individual bags of `capacityPerPlayer` each. Index 0 is always the host.
-function assignItemsToBags(items, players, capacityPerPlayer){
-  const bags = Array.from({length: players}, () => ({ items: [], value: 0, weightUsed: 0 }));
-  const sorted = items.slice().sort((a, b) => b.weight - a.weight);
-  sorted.forEach(it => {
-    let target = bags.find(b => b.weightUsed + it.weight <= capacityPerPlayer);
-    if (!target){
-      target = bags.reduce((best, b) =>
-        (capacityPerPlayer - b.weightUsed) > (capacityPerPlayer - best.weightUsed) ? b : best, bags[0]);
-    }
-    target.items.push(it);
-    target.value += it.value;
-    target.weightUsed += it.weight;
-  });
-  return bags;
-}
-
-// ---------- RENDER: static selects ----------
+// ---------- RENDER: static selects/toggles ----------
 function initSelects(){
   const primSel = document.getElementById('primaryTarget');
   PRIMARY_TARGETS.forEach(p => {
@@ -498,37 +143,52 @@ function initSelects(){
   document.querySelectorAll('#difficultyToggle .toggle-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       state.difficulty = btn.dataset.val;
-      document.querySelectorAll('#difficultyToggle .toggle-btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
+      syncToggleGroup('difficultyToggle', state.difficulty);
       renderAll();
     });
   });
   document.querySelectorAll('#weeklyToggle .toggle-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       state.weekly = btn.dataset.val;
-      document.querySelectorAll('#weeklyToggle .toggle-btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
+      syncToggleGroup('weeklyToggle', state.weekly);
       renderAll();
     });
   });
   document.querySelectorAll('#eliteToggle .toggle-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       state.elite = btn.dataset.val;
-      document.querySelectorAll('#eliteToggle .toggle-btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
+      syncToggleGroup('eliteToggle', state.elite);
       renderAll();
     });
   });
   document.querySelectorAll('.crew-opt').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       state.players = parseInt(btn.dataset.val, 10);
-      document.querySelectorAll('.crew-opt').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
+      syncCrewSelect();
       renderAll();
     });
   });
-  // set initial active crew button
-  document.querySelector(`.crew-opt[data-val="${state.players}"]`).classList.add('active');
+
+  syncToggleGroup('difficultyToggle', state.difficulty);
+  syncToggleGroup('weeklyToggle', state.weekly);
+  syncToggleGroup('eliteToggle', state.elite);
+  syncCrewSelect();
+
+  document.getElementById('submitBtn').addEventListener('click', () => {
+    saveState();
+    window.location.href = 'guide.html';
+  });
+}
+
+function syncToggleGroup(groupId, activeVal){
+  document.querySelectorAll(`#${groupId} .toggle-btn`).forEach(b=>{
+    b.classList.toggle('active', b.dataset.val === activeVal);
+  });
+}
+function syncCrewSelect(){
+  document.querySelectorAll('.crew-opt').forEach(b=>{
+    b.classList.toggle('active', parseInt(b.dataset.val,10) === state.players);
+  });
 }
 
 function renderCrewHint(){
@@ -568,47 +228,85 @@ function renderLootList(){
 
     floorItems.forEach((cat, idx) => {
       const item = state.loot.find(l => l.itemId === cat.itemId);
-      const row = document.createElement('div');
+      const maxedOut = bcCount >= 3 && !item.buyersChoice;
+      const bcId = `bc-${cat.itemId}`;
+
+      // Whole-row click target: the row itself is a <label for="bc-{id}">
+      // wrapping a real, visually-hidden checkbox — native label/checkbox
+      // semantics give click-anywhere-on-row, keyboard operability, and
+      // correct screen-reader behavior for free. Nested interactive
+      // controls (the value input, and for BAY, its own checkbox) are
+      // still independently clickable — the browser only forwards a
+      // label click to the labeled control when the click lands on plain
+      // (non-control) row content, never when it lands directly on a
+      // nested form control.
+      const row = document.createElement('label');
       row.className = 'loot-item';
+      row.htmlFor = bcId;
       if (idx % 2 === 1) row.classList.add('chk-b');
       if (item.buyersChoice) row.classList.add('bc-active');
+      if (maxedOut) row.classList.add('bc-locked');
 
       // name
       const nameEl = document.createElement('div');
       nameEl.className = 'loot-name';
       nameEl.textContent = cat.name;
+      row.appendChild(nameEl);
 
-      // controls
+      // hidden Buyer's Choice checkbox — must sit immediately before the
+      // value input in DOM order so "click row, then Tab once" lands on
+      // the value input (tab order follows DOM order, not visual position).
+      const bcCheck = document.createElement('input');
+      bcCheck.type = 'checkbox';
+      bcCheck.id = bcId;
+      bcCheck.className = 'bc-hidden';
+      bcCheck.checked = item.buyersChoice;
+      bcCheck.disabled = maxedOut;
+      bcCheck.setAttribute('aria-label', `Buyer's Choice: ${cat.name}`);
+      bcCheck.addEventListener('change', e => { item.buyersChoice = e.target.checked; renderAll(); });
+      row.appendChild(bcCheck);
+
+      // controls (value input, or for BAY, its own fixed-value checkbox —
+      // both are independent click targets carved out of the row's
+      // BC-label hit area, one uniform rule across all 33 rows)
       const controls = document.createElement('div');
       controls.className = 'item-controls';
 
-      // value
-      const valInput = document.createElement('input');
-      valInput.type = 'number'; valInput.placeholder = 'Value $'; valInput.min = '0';
-      valInput.value = item.value; valInput.dataset.f = 'val';
-      valInput.addEventListener('input', e => { item.value = e.target.value === '' ? '' : Number(e.target.value); renderAll(false); });
+      if (cat.valueType === 'checkbox'){
+        // Fixed-value checkbox item (e.g. BAY / Delivery Truck Crate):
+        // checked -> value locked to cat.fixedValue; unchecked -> excluded entirely.
+        const wrap = document.createElement('label');
+        wrap.className = 'bay-check-wrap';
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.checked = item.value === cat.fixedValue;
+        chk.addEventListener('change', e => {
+          item.value = e.target.checked ? cat.fixedValue : '';
+          renderAll(false);
+        });
+        wrap.appendChild(chk);
+        const txt = document.createElement('span');
+        txt.textContent = `Taken ($${cat.fixedValue.toLocaleString('en-US')})`;
+        wrap.appendChild(txt);
+        controls.appendChild(wrap);
+      } else {
+        const valInput = document.createElement('input');
+        valInput.type = 'number'; valInput.placeholder = 'Value $'; valInput.min = '0';
+        valInput.value = item.value; valInput.dataset.f = 'val';
+        valInput.addEventListener('input', e => { item.value = e.target.value === '' ? '' : Number(e.target.value); renderAll(false); });
+        controls.appendChild(valInput);
+      }
 
-      // buyer's choice checkbox
-      const bcWrap = document.createElement('label');
-      bcWrap.className = 'bc-wrap';
-      bcWrap.title = "Buyer's Choice";
-      const maxedOut = bcCount >= 3 && !item.buyersChoice;
-      if (maxedOut) bcWrap.classList.add('locked');
-      const bcCheck = document.createElement('input');
-      bcCheck.type = 'checkbox';
-      bcCheck.checked = item.buyersChoice;
-      bcCheck.disabled = maxedOut;
-      bcCheck.addEventListener('change', e => { item.buyersChoice = e.target.checked; renderAll(); });
-      bcWrap.appendChild(bcCheck);
-      const bcText = document.createElement('span');
-      bcText.textContent = 'BC';
-      bcWrap.appendChild(bcText);
-
-      controls.appendChild(valInput);
-      controls.appendChild(bcWrap);
-
-      row.appendChild(nameEl);
       row.appendChild(controls);
+
+      // visible "BC" badge — purely decorative state indicator; the
+      // gold row highlight (bc-active, above) already carries the real
+      // selected/unselected signal, driven off item.buyersChoice.
+      const badge = document.createElement('span');
+      badge.className = 'bc-badge';
+      badge.textContent = 'BC';
+      row.appendChild(badge);
+
       itemsWrap.appendChild(row);
     });
 
@@ -617,244 +315,39 @@ function renderLootList(){
   });
 }
 
-// ---------- RENDER: bag gauges (updated after calc) ----------
-function renderBagGauges(bags, overflow){
-  const el = document.getElementById('bagGauges');
-  el.innerHTML = '';
-  for (let i=0;i<state.players;i++){
-    const pct = Math.min(100, (bags[i].weightUsed/BAG_CAPACITY_PER_PLAYER)*100);
-    const bag = document.createElement('div');
-    bag.className = 'bag';
-    const fill = document.createElement('div');
-    fill.className = 'fill' + (overflow ? ' over':'');
-    fill.style.width = pct.toFixed(0)+'%';
-    const tag = document.createElement('div');
-    tag.className = 'tag';
-    tag.textContent = 'P'+(i+1);
-    bag.appendChild(fill);
-    bag.appendChild(tag);
-    el.appendChild(bag);
+// ---------- RENDER: player names ----------
+function renderPlayerNames(){
+  const container = document.getElementById('playerNamesList');
+  container.innerHTML = '';
+  for (let i = 0; i < state.players; i++){
+    const wrap = document.createElement('div');
+    const label = document.createElement('label');
+    label.className = 'field-label';
+    label.textContent = i === 0 ? 'Player 1 (Host)' : `Player ${i + 1}`;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = `Player ${i + 1}`;
+    input.value = state.playerNames[i] || '';
+    input.addEventListener('input', e => { state.playerNames[i] = e.target.value; saveState(); });
+    wrap.appendChild(label);
+    wrap.appendChild(input);
+    container.appendChild(wrap);
   }
 }
 
-// ---------- MAIN CALC ----------
-function calcPrimary(){
-  const p = PRIMARY_TARGETS.find(t => t.id === state.primaryId);
-  let base = p.baseValue;
-  if (state.weekly === 'first') base *= PRIMARY_MULTIPLIERS.firstWeek;
-  if (state.difficulty === 'hard') base *= PRIMARY_MULTIPLIERS.hard;
-  return { value: base, meta: p };
-}
-
+// ---------- primary info (informational only — no dollar preview here) ----------
 function renderPrimaryInfo(){
-  const { value, meta } = calcPrimary();
-  document.getElementById('primaryValueDisplay').textContent = money(value);
-  document.getElementById('primaryHint').innerHTML = meta.mandatory
+  const meta = PRIMARY_TARGETS.find(t => t.id === state.primaryId);
+  document.getElementById('primaryHint').innerHTML = meta && meta.mandatory
     ? 'Mandatory story target — must be sold every run.'
     : 'Optional rotating painting — may be sold or displayed.';
-}
-
-function runOptimizer(){
-  const totalUnits = state.players * BAG_CAPACITY_PER_PLAYER;
-
-  const valid = state.loot.filter(l => l.value !== '' && !isNaN(l.value));
-  const eligible = valid.filter(l => itemById(l.itemId).minPlayers <= state.players);
-  const toItem = (l) => ({ id: l.itemId, value: Number(l.value), weightUnits: itemById(l.itemId).weight });
-
-  const bcIdsSet = new Set(eligible.filter(l => l.buyersChoice).map(l => l.itemId));
-
-  let chosenIds, secondaryBagValue, allBuyerItemsFit, mandatoryWeightSum;
-
-  if (state.elite === 'yes' && bcIdsSet.size > 0){
-    const mandatory = eligible.filter(l => l.buyersChoice).map(toItem);
-    const optional = eligible.filter(l => !l.buyersChoice).map(toItem);
-    mandatoryWeightSum = mandatory.reduce((s,i)=>s+i.weightUnits,0);
-
-    let chosenMandatoryIds, mandatoryValue, leftoverUnits;
-    if (mandatoryWeightSum <= totalUnits){
-      chosenMandatoryIds = mandatory.map(i=>i.id);
-      mandatoryValue = mandatory.reduce((s,i)=>s+i.value,0);
-      allBuyerItemsFit = true;
-      leftoverUnits = totalUnits - mandatoryWeightSum;
-    } else {
-      const res = knapsack(mandatory, totalUnits);
-      chosenMandatoryIds = res.chosenIds;
-      mandatoryValue = res.value;
-      allBuyerItemsFit = false;
-      const usedByMandatory = chosenMandatoryIds.reduce((s,id)=>{
-        const it = mandatory.find(m=>m.id===id); return s + (it? it.weightUnits:0);
-      },0);
-      leftoverUnits = totalUnits - usedByMandatory;
-    }
-    const optRes = knapsack(optional, Math.max(0,leftoverUnits));
-    secondaryBagValue = mandatoryValue + optRes.value;
-    chosenIds = new Set([...chosenMandatoryIds, ...optRes.chosenIds]);
-  } else {
-    mandatoryWeightSum = 0;
-    allBuyerItemsFit = true;
-    const all = eligible.map(toItem);
-    const res = knapsack(all, totalUnits);
-    secondaryBagValue = res.value;
-    chosenIds = new Set(res.chosenIds);
-  }
-
-  const bonuses = bonusAmounts();
-  const attempted = state.elite === 'yes' && bcIdsSet.size > 0;
-  const eliteEligible = attempted && allBuyerItemsFit;
-  const buyerRequestBonusEach = eliteEligible ? bonuses.buyerRequest : 0;
-  const eliteBonusEach = eliteEligible ? bonuses.elitePerPlayer : 0;
-  const planningFee = state.weekly === 'repeat' ? REPEAT_RUN_FEE : 0;
-
-  const { value: primaryValue } = calcPrimary();
-  const overflow = attempted && !allBuyerItemsFit;
-
-  const chosenItemList = state.loot
-    .filter(l => chosenIds.has(l.itemId))
-    .map(l => ({ itemId: l.itemId, value: Number(l.value), weight: itemById(l.itemId).weight }));
-  const bags = assignItemsToBags(chosenItemList, state.players, BAG_CAPACITY_PER_PLAYER);
-
-  return {
-    primaryValue, secondaryBagValue, buyerRequestBonusEach, eliteBonusEach, planningFee,
-    overflow, attempted, mandatoryWeightSum,
-    chosenIds, bcIdsSet, bags,
-    ineligibleCount: valid.length - eligible.length
-  };
-}
-
-function renderResults(){
-  const r = runOptimizer();
-
-  renderBagGauges(r.bags, r.overflow);
-
-  const stamp = document.getElementById('statusStamp');
-  if (r.overflow){
-    stamp.textContent = 'Overweight'; stamp.classList.add('warn');
-  } else {
-    stamp.textContent = 'Feasible'; stamp.classList.remove('warn');
-  }
-
-  const warnBox = document.getElementById('warnBox');
-  if (r.overflow){
-    warnBox.style.display = 'block';
-    warnBox.textContent = `Your Buyer's Choice picks don't all fit in your crew's bags (need ${(r.mandatoryWeightSum/BAG_CAPACITY_PER_PLAYER).toFixed(2)} bags, have ${state.players.toFixed(2)}). The ledger packed the best-value subset it could, but the Buyer's Request and Elite Challenge bonuses are forfeited. Drop an item or bring another player.`;
-  } else {
-    warnBox.style.display = 'none';
-  }
-
-  const bonusLabel = (amount) => amount ? `${money(amount)} / player` : (r.attempted ? '— not earned' : '— not attempted');
-
-  const ledger = document.getElementById('ledger');
-  ledger.innerHTML = '';
-
-  const addRow = (k, v, extraClass) => {
-    const row = document.createElement('div');
-    row.className = 'ledger-row' + (extraClass ? ' ' + extraClass : '');
-    row.innerHTML = `<span class="k">${k}</span><span class="v${v.toString().startsWith('-')?' neg':''}">${v}</span>`;
-    ledger.appendChild(row);
-  };
-
-  addRow('Primary Target', money(r.primaryValue));
-  addRow('Secondary Targets (optimized bag)', money(r.secondaryBagValue));
-  addRow('Total Take (Career Progress)', money(r.primaryValue + r.secondaryBagValue), 'total');
-
-  const extras = [
-    ["Buyer's Request bonus", bonusLabel(r.buyerRequestBonusEach)],
-    ['Elite Challenge bonus', bonusLabel(r.eliteBonusEach)],
-  ];
-  if (r.planningFee > 0) extras.push(['Repeat-run planning fee (host only)', money(-r.planningFee)]);
-
-  const extrasLabel = document.createElement('p');
-  extrasLabel.className = 'manifest-title';
-  extrasLabel.style.marginTop = '14px';
-  extrasLabel.textContent = 'Not counted toward career progress';
-  ledger.appendChild(extrasLabel);
-  extras.forEach(([k, v]) => addRow(k, v));
-
-  // payout by player
-  const payout = document.getElementById('payoutList');
-  payout.innerHTML = '';
-  const bonusEach = r.buyerRequestBonusEach + r.eliteBonusEach;
-
-  for (let i = 0; i < state.players; i++){
-    const isHost = i === 0;
-    const bag = r.bags[i];
-    const card = document.createElement('div');
-    card.className = 'player-card';
-
-    const head = document.createElement('p');
-    head.className = 'player-card-head';
-    head.textContent = isHost ? 'Host (P1)' : `Player ${i + 1}`;
-    card.appendChild(head);
-
-    if (bag.items.length === 0){
-      const empty = document.createElement('p');
-      empty.className = 'manifest-empty';
-      empty.textContent = 'No items in this bag.';
-      card.appendChild(empty);
-    } else {
-      const floorOrder = [...new Set(LOOT_CATALOG.map(i => i.floor))];
-      floorOrder.forEach(floor => {
-        const floorItems = bag.items.filter(it => itemById(it.itemId).floor === floor);
-        if (floorItems.length === 0) return;
-
-        const floorHeading = document.createElement('p');
-        floorHeading.className = 'loot-floor-heading';
-        floorHeading.textContent = floor;
-        card.appendChild(floorHeading);
-
-        floorItems.forEach(it => {
-          const cat = itemById(it.itemId);
-          const isBC = r.bcIdsSet.has(it.itemId);
-          const div = document.createElement('div');
-          div.className = 'manifest-item';
-          div.innerHTML = `<span class="name">${cat.name}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(it.value)}</span>`;
-          card.appendChild(div);
-        });
-      });
-    }
-
-    if (isHost){
-      const primaryRow = document.createElement('div');
-      primaryRow.className = 'ledger-row';
-      primaryRow.innerHTML = `<span class="k">Primary Target</span><span class="v">${money(r.primaryValue)}</span>`;
-      card.appendChild(primaryRow);
-    }
-    if (bonusEach > 0){
-      const bonusRow = document.createElement('div');
-      bonusRow.className = 'ledger-row';
-      bonusRow.innerHTML = `<span class="k">Buyer's Request + Elite bonus</span><span class="v">${money(bonusEach)}</span>`;
-      card.appendChild(bonusRow);
-    }
-    if (isHost && r.planningFee > 0){
-      const feeRow = document.createElement('div');
-      feeRow.className = 'ledger-row';
-      feeRow.innerHTML = `<span class="k">Repeat-run planning fee</span><span class="v neg">${money(-r.planningFee)}</span>`;
-      card.appendChild(feeRow);
-    }
-
-    let take = bag.value + bonusEach;
-    if (isHost) take += r.primaryValue - r.planningFee;
-    const totalRow = document.createElement('div');
-    totalRow.className = 'ledger-row total';
-    totalRow.innerHTML = `<span class="k">Take</span><span class="v">${money(take)}</span>`;
-    card.appendChild(totalRow);
-
-    payout.appendChild(card);
-  }
-
-  if (r.ineligibleCount > 0){
-    const note = document.createElement('p');
-    note.className = 'hint';
-    note.style.marginTop = '10px';
-    note.textContent = `${r.ineligibleCount} item(s) excluded — they need more players than your current crew size.`;
-    payout.appendChild(note);
-  }
 }
 
 function renderAll(fullLootRerender = true){
   if (fullLootRerender) renderLootList();
   renderPrimaryInfo();
-  renderResults();
+  renderPlayerNames();
+  saveState();
 }
 
 async function init(){
@@ -867,17 +360,15 @@ async function init(){
     const lootData = await lootRes.json();
 
     PRIMARY_TARGETS = primaryData.targets.slice().sort((a, b) => a.name.localeCompare(b.name));
-    PRIMARY_MULTIPLIERS = primaryData.multipliers;
     LOOT_CATALOG = lootData.items;
-    BAG_CAPACITY_PER_PLAYER = lootData.bagCapacityPerPlayer;
 
-    state.loot = LOOT_CATALOG.map(cat => ({ itemId: cat.itemId, value: '', buyersChoice: false }));
+    loadPersisted();
 
     renderCrewHint();
     initSelects();
     renderAll();
   } catch (err) {
-    document.getElementById('ledger').innerHTML =
+    document.getElementById('lootList').innerHTML =
       `<p class="hint" style="color:var(--warn);">Failed to load loot data (${err.message}). Serve this folder over HTTP (not file://) and reload.</p>`;
   }
 }
