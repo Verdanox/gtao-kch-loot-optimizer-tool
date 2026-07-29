@@ -13,7 +13,7 @@ Developed by dejarjar013, Mazemel, EtcherTM, and CMajor with help from Claude Co
 
 ### Model Details
 
-* **Normal** — pools all players' bags together and maximizes total secondary loot value for the crew, subject to each player's bag capacity. Buyer's Choice items are locked in first whenever Elite Challenge is on. Includes a slight built-in preference for routing Second Floor/Crisp Gallery items into the host's bag specifically, since the host typically pops the EMP after grabbing the primary target and being in the gallery makes that easy to verify — always on by default, not a separate toggle.
+* **Normal** — pools all players' bags together and maximizes total secondary loot value for the crew, subject to each player's bag capacity. Buyer's Choice items are locked in first whenever Elite Challenge is on. Includes a slight built-in preference for routing Second Floor/Crisp Gallery items into the host's bag specifically, since the host typically pops the EMP after grabbing the primary target and being in the gallery makes that easy to verify — always on by default, not a separate toggle. This only actually matters with 2+ players: Crisp Gallery needs two players to access at all, and with a solo crew there's only one bag in play, so there's no "host's bag" to prefer over anyone else's.
 
 ### Roadmap
 
