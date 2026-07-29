@@ -13,6 +13,9 @@
     <p class="eyebrow">Case File · Kortz Center Heist</p>
     <h1>Loot Ledger — Scope &amp; Setup</h1>
     <p class="sub">Scope your secondary targets, set your crew and difficulty, then submit to generate your Heist Guide. Everything here autosaves as you go — refresh, close the browser, or come back later and it'll still be here.</p>
+    <div class="header-actions">
+      <button type="button" id="clearBtn" class="clear-btn">Clear Board</button>
+    </div>
   </div>
 
   <!-- STEP 1: Primary target -->
@@ -99,6 +102,15 @@
 
 </div>
 
+<dialog id="clearDialog" class="confirm-dialog">
+  <p class="confirm-title">Clear the board?</p>
+  <p class="confirm-body">This erases your primary target, difficulty, crew size, every scoped loot value and Buyer's Choice pick, player names, and the security combo saved on the Heist Guide page. This can't be undone.</p>
+  <div class="confirm-actions">
+    <button type="button" id="clearCancelBtn" class="btn-ghost">Cancel</button>
+    <button type="button" id="clearConfirmBtn" class="btn-danger">Yes, clear everything</button>
+  </div>
+</dialog>
+
 <script type="module">
 import {
   defaultPage1State, defaultPage2State,
@@ -178,6 +190,30 @@ function initSelects(){
     saveState();
     window.location.href = 'guide.html';
   });
+}
+
+// ---------- Clear board (confirm dialog, wholesale reset of page1+page2 state) ----------
+function initClearControls(){
+  const dialog = document.getElementById('clearDialog');
+  document.getElementById('clearBtn').addEventListener('click', () => dialog.showModal());
+  document.getElementById('clearCancelBtn').addEventListener('click', () => dialog.close());
+  document.getElementById('clearConfirmBtn').addEventListener('click', () => {
+    clearAll();
+    dialog.close();
+  });
+  // Click on the backdrop (outside the dialog's own content box) cancels, same as Escape.
+  dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+}
+
+function clearAll(){
+  state = defaultPage1State(LOOT_CATALOG);
+  page2State = defaultPage2State();
+  document.getElementById('primaryTarget').value = state.primaryId;
+  syncToggleGroup('difficultyToggle', state.difficulty);
+  syncToggleGroup('weeklyToggle', state.weekly);
+  syncToggleGroup('eliteToggle', state.elite);
+  syncCrewSelect();
+  renderAll();
 }
 
 function syncToggleGroup(groupId, activeVal){
@@ -366,6 +402,7 @@ async function init(){
 
     renderCrewHint();
     initSelects();
+    initClearControls();
     renderAll();
   } catch (err) {
     document.getElementById('lootList').innerHTML =

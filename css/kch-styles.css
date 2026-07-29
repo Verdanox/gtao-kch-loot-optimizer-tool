@@ -270,6 +270,70 @@ select:focus, input:focus{border-color:var(--gold);}
 }
 .submit-btn:hover{background:#dcb662;}
 
+.header-actions{margin-top:14px;}
+.clear-btn{
+  background:transparent;
+  border:1px solid var(--warn);
+  color:var(--warn);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  padding:8px 14px;
+  cursor:pointer;
+  transition:background .12s ease;
+}
+.clear-btn:hover{background:rgba(217,105,79,0.12);}
+
+dialog.confirm-dialog{
+  border:1px solid var(--line);
+  background:var(--panel);
+  color:var(--text);
+  max-width:420px;
+  width:calc(100% - 40px);
+  padding:24px;
+  font-family:var(--body);
+}
+dialog.confirm-dialog::backdrop{background:rgba(0,0,0,0.6);}
+.confirm-title{
+  font-family:var(--display);
+  font-size:18px;
+  text-transform:uppercase;
+  letter-spacing:.02em;
+  margin:0 0 10px;
+  color:var(--warn);
+}
+.confirm-body{
+  font-size:13.5px;
+  color:var(--muted);
+  line-height:1.6;
+  margin:0 0 20px;
+}
+.confirm-actions{display:flex; gap:10px; justify-content:flex-end;}
+.btn-ghost{
+  background:var(--panel-2);
+  border:1px solid var(--line);
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+  text-transform:uppercase;
+  padding:10px 16px;
+  cursor:pointer;
+}
+.btn-ghost:hover{border-color:var(--gold-dim);}
+.btn-danger{
+  background:var(--warn);
+  border:1px solid var(--warn);
+  color:var(--bg);
+  font-family:var(--mono);
+  font-weight:600;
+  font-size:12px;
+  text-transform:uppercase;
+  padding:10px 16px;
+  cursor:pointer;
+}
+.btn-danger:hover{background:#c95a41;}
+
 /* Results */
 .results{
   border:1px solid var(--gold-dim);
