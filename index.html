@@ -15,6 +15,7 @@
     <p class="sub">Scope your secondary targets, set your crew and difficulty, then submit to generate your Heist Guide. Everything here autosaves as you go — refresh, close the browser, or come back later and it'll still be here.</p>
     <div class="header-actions">
       <button type="button" id="clearBtn" class="clear-btn">Clear Board</button>
+      <button type="button" id="feedbackBtn" class="feedback-btn">Feedback</button>
     </div>
   </div>
 
@@ -111,6 +112,14 @@
   </div>
 </dialog>
 
+<dialog id="feedbackDialog" class="confirm-dialog feedback-dialog">
+  <div class="feedback-dialog-head">
+    <p class="confirm-title" style="margin:0;">Report a Bug / Send Feedback</p>
+    <button type="button" id="feedbackCloseBtn" class="btn-ghost">Close</button>
+  </div>
+  <iframe id="feedbackFrame" title="Feedback form" loading="lazy"></iframe>
+</dialog>
+
 <script type="module">
 import {
   defaultPage1State, defaultPage2State,
@@ -121,6 +130,8 @@ import {
 // ---------- DATA (loaded at runtime from data/*.json) ----------
 let PRIMARY_TARGETS = [];
 let LOOT_CATALOG = [];
+
+const FEEDBACK_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSde7tKREst9V7fat-8c6yTpRWZkq6k4nNLVK07hNc4wJviivg/viewform?embedded=true';
 
 // ---------- STATE ----------
 let state = null;    // page1 fields + loot, hydrated from localStorage (or defaults)
@@ -214,6 +225,18 @@ function clearAll(){
   syncToggleGroup('eliteToggle', state.elite);
   syncCrewSelect();
   renderAll();
+}
+
+// ---------- Feedback (embedded Google Form, loaded lazily on first open) ----------
+function initFeedbackControls(){
+  const dialog = document.getElementById('feedbackDialog');
+  const frame = document.getElementById('feedbackFrame');
+  document.getElementById('feedbackBtn').addEventListener('click', () => {
+    if (!frame.src) frame.src = FEEDBACK_FORM_URL;
+    dialog.showModal();
+  });
+  document.getElementById('feedbackCloseBtn').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
 }
 
 function syncToggleGroup(groupId, activeVal){
@@ -403,6 +426,7 @@ async function init(){
     renderCrewHint();
     initSelects();
     initClearControls();
+    initFeedbackControls();
     renderAll();
   } catch (err) {
     document.getElementById('lootList').innerHTML =

@@ -13,6 +13,9 @@
     <p class="eyebrow">Case File · Kortz Center Heist</p>
     <h1>Heist Guide</h1>
     <p class="sub">One-stop reference for the run: who carries what, and where to find it. Screenshot this or keep it open on a second screen.</p>
+    <div class="header-actions">
+      <button type="button" id="feedbackBtn" class="feedback-btn">Feedback</button>
+    </div>
   </div>
 
   <div class="warn-box" id="prepWarnBox" style="display:none; margin:0 0 16px;"></div>
@@ -65,6 +68,14 @@
     <a href="index.html" class="back-link">← Back to Edit</a>
   </div>
 
+  <dialog id="feedbackDialog" class="confirm-dialog feedback-dialog">
+    <div class="feedback-dialog-head">
+      <p class="confirm-title" style="margin:0;">Report a Bug / Send Feedback</p>
+      <button type="button" id="feedbackCloseBtn" class="btn-ghost">Close</button>
+    </div>
+    <iframe id="feedbackFrame" title="Feedback form" loading="lazy"></iframe>
+  </dialog>
+
   <p class="footnote">Kortz Center Heist released July 14, 2026. Primary Target payouts, the +10% Hard Mode modifier, the Buyer's Request bonus ($50,000 Normal / $100,000 Hard), the Elite Challenge bonus ($50,000 Normal / $100,000 Hard, per player) and the $100,000 repeat-run planning fee reflect publicly reported figures and may shift with balance updates. The Elite Challenge bonus is never projected here — its success depends on live-execution conditions (the 17-minute clock, etc.) this tool doesn't model.</p>
 
 </div>
@@ -103,6 +114,8 @@ const FLOOR_SLUGS = {
 function floorSlug(floor) {
   return FLOOR_SLUGS[floor] || floor.toLowerCase().replace(/\s+/g, '-');
 }
+
+const FEEDBACK_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSde7tKREst9V7fat-8c6yTpRWZkq6k4nNLVK07hNc4wJviivg/viewform?embedded=true';
 
 // ---------- STATE (hydrated from localStorage) ----------
 let state = null;
@@ -399,6 +412,18 @@ function wireSecurityCombo(){
   });
 }
 
+// ---------- Feedback (embedded Google Form, loaded lazily on first open) ----------
+function initFeedbackControls(){
+  const dialog = document.getElementById('feedbackDialog');
+  const frame = document.getElementById('feedbackFrame');
+  document.getElementById('feedbackBtn').addEventListener('click', () => {
+    if (!frame.src) frame.src = FEEDBACK_FORM_URL;
+    dialog.showModal();
+  });
+  document.getElementById('feedbackCloseBtn').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+}
+
 async function init(){
   try {
     const [primaryRes, lootRes] = await Promise.all([
@@ -416,6 +441,7 @@ async function init(){
     loadPersisted();
 
     wireSecurityCombo();
+    initFeedbackControls();
     renderGuide();
   } catch (err) {
     document.getElementById('bagLedger').innerHTML =
