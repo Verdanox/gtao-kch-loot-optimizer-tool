@@ -123,6 +123,111 @@ export function assignItemsToBags(items, players, capacityPerPlayer) {
   return bags;
 }
 
+// ---------- exact multi-bin (per-player) knapsack ----------
+function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+
+// Exact bin-constrained knapsack: `mandatory` items must ALL be included;
+// `optional` items are chosen to maximize total value, subject to the
+// combined set being packable into `bins` bins of `capacityPerBin` each.
+//
+// This treats per-player bag capacity as a real constraint from the
+// start. The old approach (pooled knapsack against players*capacity,
+// then a separate First-Fit-Decreasing split into individual bags) could
+// report a value the crew couldn't actually carry — fitting a pooled
+// total doesn't guarantee the chosen items can be partitioned into
+// fixed-size bins (real bug report, 2026-08-01: a bag showing 110%
+// full). Bin packing is NP-hard in general, but tractable here because
+// every catalog weight — and capacityPerBin — share a common factor
+// (10, today). `unit` is computed as a GCD rather than hardcoded /10, so
+// this stays correct (just a bigger, still-small search) if a future
+// item ever broke that pattern; see the "power drill loot" note in
+// secondary-loot.json's _notes for why that's not expected.
+//
+// `opts.boostFloors`, if given, lets certain floors' items get first
+// crack at placement among the optional pool — mirrors the Normal
+// model's best-effort host-routing preference (bin 0 is always tried
+// first for every item on a tie, same as assignItemsToBags; putting
+// boosted-floor items earlier in processing order just means they get
+// that first-crack tie-break before bin 0 fills up with other stuff).
+//
+// Returns null if `mandatory` alone can't be packed into the bins at
+// all (the caller's cue to forfeit and fall back to an unconstrained
+// pack). Otherwise returns { value, bags }: bags is a `bins`-length
+// array of { items, value, weightUsed }, items shaped like the input
+// objects ({ id, value, weightUnits, floor }).
+export function packBins(mandatory, optional, bins, capacityPerBin, opts = {}) {
+  const boostFloors = opts.boostFloors || new Set();
+
+  const allWeights = [...mandatory, ...optional].map(i => i.weightUnits).filter(w => w > 0);
+  const unit = allWeights.reduce((g, w) => gcd(g, w), capacityPerBin);
+  const cap = Math.round(capacityPerBin / unit);
+
+  const optionalOrdered = [
+    ...optional.filter(it => boostFloors.has(it.floor)),
+    ...optional.filter(it => !boostFloors.has(it.floor))
+  ];
+  const items = [
+    ...mandatory.map(it => ({ ...it, w: it.weightUnits / unit, mandatory: true })),
+    ...optionalOrdered.map(it => ({ ...it, w: it.weightUnits / unit, mandatory: false }))
+  ];
+
+  const NEG = -Infinity;
+  const memo = new Map();
+
+  // Best additional value achievable from item index i onward, given
+  // `caps` = remaining capacity (in `unit`s) per bin.
+  function solve(i, caps) {
+    if (i === items.length) return 0;
+    const key = i + '|' + caps.join(',');
+    const cached = memo.get(key);
+    if (cached !== undefined) return cached;
+
+    const it = items[i];
+    let best = it.mandatory ? NEG : solve(i + 1, caps);
+    const tried = new Set();
+    for (let b = 0; b < bins; b++) {
+      if (caps[b] < it.w || tried.has(caps[b])) continue;
+      tried.add(caps[b]); // symmetric bins: identical remaining capacity gives an identical result
+      const next = caps.slice();
+      next[b] -= it.w;
+      const sub = solve(i + 1, next);
+      if (sub !== NEG) best = Math.max(best, it.value + sub);
+    }
+    memo.set(key, best);
+    return best;
+  }
+
+  const initCaps = new Array(bins).fill(cap);
+  const totalValue = solve(0, initCaps);
+  if (totalValue === NEG) return null;
+
+  // Reconstruct one concrete assignment matching that optimal value,
+  // preferring bin 0 (the host) on ties, same as the old FFD's
+  // `bags.find` (checks bag 0 first) always did.
+  const bagsOut = Array.from({ length: bins }, () => ({ items: [], value: 0, weightUsed: 0 }));
+  let caps = initCaps.slice();
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const target = solve(i, caps);
+    if (!it.mandatory && solve(i + 1, caps) === target) continue; // optimal path leaves this item out
+
+    for (let b = 0; b < bins; b++) {
+      if (caps[b] < it.w) continue;
+      const next = caps.slice();
+      next[b] -= it.w;
+      if (it.value + solve(i + 1, next) === target) {
+        bagsOut[b].items.push({ id: it.id, value: it.value, weightUnits: it.weightUnits, floor: it.floor });
+        bagsOut[b].value += it.value;
+        bagsOut[b].weightUsed += it.weightUnits;
+        caps = next;
+        break;
+      }
+    }
+  }
+
+  return { value: totalValue, bags: bagsOut };
+}
+
 // ---------- optimizer ----------
 // Buyer's Choice items are locked in first (mandatory) only when Elite
 // Challenge is attempted; with Elite off, Buyer's Choice tags are purely
@@ -142,11 +247,12 @@ export function assignItemsToBags(items, players, capacityPerPlayer) {
 // attempted at all — Buyer's Choice weighting is dropped entirely, not
 // partially honored.
 export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstants) {
-  const totalUnits = state.players * bagCapacityPerPlayer;
-
   const valid = state.loot.filter(l => l.value !== '' && l.value !== null && l.value !== undefined && !isNaN(l.value));
   const eligible = valid.filter(l => itemById(catalog, l.itemId).minPlayers <= state.players);
-  const toItem = (l) => ({ id: l.itemId, value: Number(l.value), weightUnits: itemById(catalog, l.itemId).weight });
+  const toItem = (l) => {
+    const cat = itemById(catalog, l.itemId);
+    return { id: l.itemId, value: Number(l.value), weightUnits: cat.weight, floor: cat.floor };
+  };
 
   const bcValid = valid.filter(l => l.buyersChoice);
   const bcIdsSet = new Set(bcValid.map(l => l.itemId));
@@ -156,49 +262,45 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
 
   const attempted = state.elite === 'yes' && bcIdsSet.size > 0;
   const canLockMandatory = attempted && bcIneligibleIds.length === 0;
+  const packOpts = { boostFloors: HOST_PRIORITY_FLOORS };
 
-  let chosenIds, secondaryBagValue, allBuyerItemsFit, mandatoryWeightSum;
+  let secondaryBagValue, allBuyerItemsFit, mandatoryWeightSum, packedBags;
 
   if (canLockMandatory) {
     const mandatory = eligible.filter(l => l.buyersChoice).map(toItem);
     const optional = eligible.filter(l => !l.buyersChoice).map(toItem);
     mandatoryWeightSum = mandatory.reduce((s, i) => s + i.weightUnits, 0);
 
-    let chosenMandatoryIds, mandatoryValue, leftoverUnits;
-    if (mandatoryWeightSum <= totalUnits) {
-      chosenMandatoryIds = mandatory.map(i => i.id);
-      mandatoryValue = mandatory.reduce((s, i) => s + i.value, 0);
-      leftoverUnits = totalUnits - mandatoryWeightSum;
+    const packed = packBins(mandatory, optional, state.players, bagCapacityPerPlayer, packOpts);
+    if (packed) {
+      allBuyerItemsFit = true;
+      secondaryBagValue = packed.value;
+      packedBags = packed.bags;
     } else {
-      const res = knapsack(mandatory, totalUnits);
-      chosenMandatoryIds = res.chosenIds;
-      mandatoryValue = res.value;
-      const usedByMandatory = chosenMandatoryIds.reduce((s, id) => {
-        const it = mandatory.find(m => m.id === id); return s + (it ? it.weightUnits : 0);
-      }, 0);
-      leftoverUnits = totalUnits - usedByMandatory;
+      // Mandatory items alone can't be bin-packed into this crew's bags —
+      // forfeit the bonuses and fall back to the exact same unconstrained
+      // value-max pack used when Elite isn't attempted at all.
+      allBuyerItemsFit = false;
+      const fallback = packBins([], eligible.map(toItem), state.players, bagCapacityPerPlayer, packOpts);
+      secondaryBagValue = fallback.value;
+      packedBags = fallback.bags;
     }
-    const optRes = knapsack(optional, Math.max(0, leftoverUnits));
-    secondaryBagValue = mandatoryValue + optRes.value;
-    chosenIds = new Set([...chosenMandatoryIds, ...optRes.chosenIds]);
-
-    // bcIneligibleIds is guaranteed empty here, so fit hinges on weight alone.
-    allBuyerItemsFit = mandatoryWeightSum <= totalUnits;
   } else {
     // Either never attempted, or attempted with a structurally-unreachable
     // marked item — either way, no Buyer's Choice weighting applied to
-    // packing. Pure value-max knapsack over everything eligible.
+    // packing. Pure value-max pack over everything eligible.
     mandatoryWeightSum = 0;
-    const all = eligible.map(toItem);
-    const res = knapsack(all, totalUnits);
-    secondaryBagValue = res.value;
-    chosenIds = new Set(res.chosenIds);
+    const packed = packBins([], eligible.map(toItem), state.players, bagCapacityPerPlayer, packOpts);
+    secondaryBagValue = packed.value;
+    packedBags = packed.bags;
 
     // Not attempted at all -> nothing to forfeit. Attempted but unreachable
-    // -> always forfeited, regardless of what the unconstrained knapsack
+    // -> always forfeited, regardless of what the unconstrained pack
     // happened to pack.
     allBuyerItemsFit = !attempted;
   }
+
+  const chosenIds = new Set(packedBags.flatMap(b => b.items.map(i => i.id)));
 
   const bonuses = bonusAmounts(state.difficulty, bonusConstants);
   const eliteEligible = attempted && allBuyerItemsFit;
@@ -208,13 +310,14 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
 
   const overflow = attempted && !allBuyerItemsFit;
 
-  const chosenItemList = state.loot
-    .filter(l => chosenIds.has(l.itemId))
-    .map(l => {
-      const cat = itemById(catalog, l.itemId);
-      return { itemId: l.itemId, value: Number(l.value), weight: cat.weight, floor: cat.floor };
-    });
-  const bags = assignItemsToBags(chosenItemList, state.players, bagCapacityPerPlayer);
+  // packBins' items are shaped { id, value, weightUnits, floor } to match
+  // knapsack()'s convention; translate to the { itemId, value, weight,
+  // floor } shape the rest of the app (guide.html, tests) expects.
+  const bags = packedBags.map(b => ({
+    value: b.value,
+    weightUsed: b.weightUsed,
+    items: b.items.map(i => ({ itemId: i.id, value: i.value, weight: i.weightUnits, floor: i.floor }))
+  }));
 
   return {
     secondaryBagValue, buyerRequestBonusEach, eliteBonusEach, planningFee,

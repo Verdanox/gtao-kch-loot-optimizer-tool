@@ -225,7 +225,7 @@ function renderBagSection(r){
       const plural = r.bcIneligibleIds.length > 1;
       warnBox.textContent = `${names} ${plural ? 'are' : 'is'} marked Buyer's Choice but need${plural ? '' : 's'} more players than your crew (${state.players}) to even reach. Buyer's Request and Elite Challenge bonuses are forfeited.`;
     } else {
-      warnBox.textContent = `Your Buyer's Choice picks don't all fit in your crew's bags (need ${(r.mandatoryWeightSum / BAG_CAPACITY_PER_PLAYER).toFixed(2)} bags, have ${state.players.toFixed(2)}). The guide packed the best-value subset it could, but the Buyer's Request and Elite Challenge bonuses are forfeited. Drop an item or bring another player.`;
+      warnBox.textContent = `Heads up: your Buyer's Choice picks exceed expected capacity — double check what you marked. The guide packed the best-value subset it could, but the Buyer's Request and Elite Challenge bonuses are forfeited.`;
     }
   } else {
     warnBox.style.display = 'none';
