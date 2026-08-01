@@ -8,18 +8,22 @@
     "scopeNote: reminder-only metadata (2026-08-03), currently only on BAY — rendered on index.html under the item's name whenever present. Warns that the item isn't guaranteed to be scoutable/present at all (the truck doesn't always spawn), distinct from requiresPreps above (which warns about needing a prep mission, not about the item's existence being conditional).",
     "requiresPreps: reminder-only metadata (2026-07-26) for four items that need the Glass Cutter prep to actually be lootable in-game (0-A, 2-B, 2-C, 2-K). No eligibility gating or optimizer behavior is wired off this field yet — guide.html just warns if any of these end up packed. Full gating (a toggle, state.activePreps, excluding these from the optimizer when the prep isn't active) is deferred to a future 'specify your preps' system; see internal/model-notes.md's 'Glass cutter item gating' section for that design.",
     "variants/variantLabel: optional cosmetic sub-type picker (2026-08-04), currently only on 2-H (Gemstone) — the gem that spawns in the Crisp Gallery varies per run, and the crew wants the guide to name it. Purely descriptive: the selection is NOT an eligibility, weight, value, or packing input, it just rides along in saved state and gets displayed next to the item name. Any catalog item can grow a `variants` array and get the same dropdown on index.html with no JS changes.",
-    "description: rudimentary 2-4 word tag (2026-07-31) added to help players unfamiliar with the heist recognize what they're grabbing — sourced from the user's living spreadsheet at internal/secondary-loot.json.csv (gitignored, not shipped) and merged in here by itemId on request. Rendered always-visible inline next to the item name on both index.html and guide.html — see internal/requirements.md for the disclosure-vs-inline UI decision."
+    "floorMaps / xPct / yPct (2026-07-31): floorMaps is a floor-name-to-image-asset lookup, many-to-one (see internal/requirements.md — Second and Crisp Gallery share one map image; floors with no entry, e.g. Loading Bay, have no map at all, render code should skip rather than error). xPct/yPct are per-item, percentage-based, top-left origin, position on whichever image the item's floor resolves to via floorMaps. Alarm Floor is the pilot: only floor with real coordinates and a real map asset so far (assets/floors/alarm-floor.png), chosen as the smallest floor (3 items) to validate pin rendering/legibility before tagging the rest. No rendering code consumes these fields yet.",
+    "description: rudimentary 2-4 word tag (2026-07-31) added to help players unfamiliar with the heist recognize what they're grabbing — sourced from the user's living spreadsheet at internal/secondary-loot.csv (gitignored, not shipped) and merged in here by itemId on request. Rendered always-visible inline next to the item name on both index.html and guide.html — see internal/requirements.md for the disclosure-vs-inline UI decision."
   ],
   "bagCapacityPerPlayer": 100,
+  "floorMaps": {
+    "Alarm Floor": "assets/floors/alarm-floor.png"
+  },
   "items": [
     { "itemId": "B-A", "name": "Swingset Study No. LXIX", "description": "painting, pineapple", "floor": "Vault", "weight": 50, "minPlayers": 1 },
     { "itemId": "B-B", "name": "The Hunter Becomes the Hunted", "description": "painting, hunter", "floor": "Vault", "weight": 50, "minPlayers": 1 },
     { "itemId": "B-C", "name": "With Friends Like These", "description": "painting, cactus", "floor": "Vault", "weight": 50, "minPlayers": 1 },
     { "itemId": "B-D", "name": "Het Gouden Hondje", "description": "painting, dog", "floor": "Vault", "weight": 50, "minPlayers": 1 },
     { "itemId": "BAY", "name": "Delivery Truck Crate", "description": "crate in back of truck", "floor": "Loading Bay", "weight": 30, "minPlayers": 1, "valueType": "checkbox", "fixedValue": 110000, "scopeNote": "Verify the truck is actually there during scope-out — it doesn't always spawn." },
-    { "itemId": "0-A", "name": "Memento Non Mori", "description": "skull", "floor": "Alarm Floor", "weight": 30, "minPlayers": 1, "requiresPreps": ["glass-cutter"] },
-    { "itemId": "0-B", "name": "Oeuf de Coquard", "description": "jeweled egg", "floor": "Alarm Floor", "weight": 20, "minPlayers": 1 },
-    { "itemId": "0-C", "name": "Byzantine Hoops", "description": "gold bracelets", "floor": "Alarm Floor", "weight": 10, "minPlayers": 1 },
+    { "itemId": "0-A", "name": "Memento Non Mori", "description": "skull", "floor": "Alarm Floor", "weight": 30, "minPlayers": 1, "requiresPreps": ["glass-cutter"], "xPct": 30.5, "yPct": 81.8 },
+    { "itemId": "0-B", "name": "Oeuf de Coquard", "description": "jeweled egg", "floor": "Alarm Floor", "weight": 20, "minPlayers": 1, "xPct": 21.3, "yPct": 81.8 },
+    { "itemId": "0-C", "name": "Byzantine Hoops", "description": "gold bracelets", "floor": "Alarm Floor", "weight": 10, "minPlayers": 1, "xPct": 9.5, "yPct": 81.8 },
     { "itemId": "1-A", "name": "Fertility Statue", "description": "statue", "floor": "First", "weight": 20, "minPlayers": 1 },
     { "itemId": "1-B", "name": "Antique Rings", "description": "rings", "floor": "First", "weight": 10, "minPlayers": 1 },
     { "itemId": "1-C", "name": "Antique Bands", "description": "gold bracelets", "floor": "First", "weight": 10, "minPlayers": 1 },
