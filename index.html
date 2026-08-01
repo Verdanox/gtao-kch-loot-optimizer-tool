@@ -309,7 +309,13 @@ function renderLootList(){
       // name
       const nameEl = document.createElement('div');
       nameEl.className = 'loot-name';
-      nameEl.textContent = cat.name;
+      nameEl.append(cat.name + ' ');
+      if (cat.description){
+        const descEl = document.createElement('span');
+        descEl.className = 'item-desc';
+        descEl.textContent = `— ${cat.description}`;
+        nameEl.appendChild(descEl);
+      }
       row.appendChild(nameEl);
 
       // hidden Buyer's Choice checkbox — must sit immediately before the

@@ -273,7 +273,8 @@ function renderItemsList(r){
           const div = document.createElement('div');
           div.className = 'manifest-item';
           div.dataset.floor = floorSlug(floor);
-          div.innerHTML = `<span class="name">${cat.name}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(it.value)}</span>`;
+          const descHtml = cat.description ? ` <span class="item-desc">— ${cat.description}</span>` : '';
+          div.innerHTML = `<span class="name">${cat.name}${descHtml}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(it.value)}</span>`;
           card.appendChild(div);
         });
       });
