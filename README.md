@@ -23,6 +23,8 @@ Developed by dejarjar013, Mazemel, EtcherTM, and CMajor with help from Claude Co
 * Buyer's Choice / Elite Challenge conditional packing, with the Buyer's Request bonus shown per player
 * Glass cutter reminder banner when a gated item ends up in your loot pool
 * Clear Board control to reset everything for a new scope-out
+* In-line item descriptions in the loot list and Heist Guide, to help players unfamiliar with the heist recognize what they're grabbing
+* Embedded feedback form (bug/feedback/feature request) on both pages, no navigating away
 
 **Up next**
 * Greedy model — stacks the most valuable loot into the host's bag first, then splits the remainder among the rest of the crew to maximize career-progress pace rather than total crew value
@@ -31,6 +33,12 @@ Developed by dejarjar013, Mazemel, EtcherTM, and CMajor with help from Claude Co
 * Reminder for when to pop your EMP mid-run
 * Optional preps/approach inputs (entry point, weapon loadout, getaway vehicle, guard missions, power drills, etc.) feeding into the optimizer, beyond today's glass-cutter reminder
 * Print/save-as-image friendly view
+* Light mode toggle (last on the list — dark is the whole vibe, but an "unironic" light mode for daylight/print use)
 * **Final form**: a floor-by-floor map of the Kortz Center with item locations pinned and color-coded by player
+  * Capture each item's x/y position (percentage-based) on its floor map
+  * Floor-to-map-image lookup (some floors share one map image, e.g. Second/Crisp Gallery; Loading Bay has none — just one crate)
+  * Render the map image with item pins overlaid at their captured positions
+  * Color-code pins by the player assigned to grab that item
+  * Baked-in landmark labels on the map art (stairs, alarm box, etc.) for orientation
 * Collecting input data to speed up filling out common values
 * Spreadsheet input?
