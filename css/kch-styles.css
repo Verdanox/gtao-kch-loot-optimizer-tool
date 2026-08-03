@@ -15,10 +15,20 @@
   --mono: 'IBM Plex Mono', monospace;
   --display: 'Oswald', sans-serif;
   --body: 'Inter', sans-serif;
-  --p1-color:#c9a24b;
-  --p2-color:#49c8b8;
+  /* Player palette (2026-08-02): P2/P4 were both blue-family (teal/sky-blue)
+     and collapsed into each other under blue-shifting night-mode display
+     filters. Replaced with green/berry-pink — no two slots share a blue-
+     dominant hue now. Re-validated as a set (not eyeballed) via the dataviz
+     skill's OKLab CVD simulator: all 4 pass lightness band, chroma floor,
+     protan/deutan/tritan separation, and normal-vision floor, all-pairs (not
+     just adjacent), against both --bg and --panel as the surface. P1 is a
+     hair darker than --gold specifically to clear the OKLCH lightness band
+     that check requires — --gold itself (buttons, headers, etc.) is
+     untouched. P3 (purple) was already fine and is unchanged. */
+  --p1-color:#b8863a;
+  --p2-color:#377c47;
   --p3-color:#9b7fd4;
-  --p4-color:#5fa8d3;
+  --p4-color:#c94587;
   --floor-vault:#b08968;
   --floor-loading-bay:#7fb069;
   --floor-alarm-floor:#e0574f;
