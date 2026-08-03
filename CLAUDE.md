@@ -18,7 +18,9 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   with a reversible lock control, the promoted "who grabs what" info
   (optimized bag value + per-player item lists, color-coded by floor), then
   the demoted "Finale Result" (Primary/Secondary totals + per-player
-  payout/bonus figures — no combined "Total Take" headline, see below).
+  payout/bonus figures — no combined "Total Take" headline, see below;
+  each player's own card below it does show a per-player "Career
+  Progress" figure, distinct from "Payout").
   These are genuinely separate render passes/DOM
   zones, not just reordered markup — the item ledger and the payout figures
   used to be welded into the same per-player card. Has a "back to edit"
@@ -45,12 +47,29 @@ Both pages are `type="module"` and `import` directly from `js/kch-model.js`
   bag-space math is the tool's job, not theirs.
   - **Exception: the Delivery Truck Crate (`BAY`)** renders as a checkbox,
     not a number input, driven by `valueType: "checkbox"` and
-    `fixedValue: 122500` on its catalog entry (data-driven, not a
+    `fixedValue: 110000` on its catalog entry (data-driven, not a
     hardcoded `itemId === 'BAY'` check in the JS). Checked locks its value
     to `fixedValue`; unchecked excludes it entirely, even if it's also
     marked Buyer's Choice. This is the one deliberate exception to "every
     item starts blank" — its true value can't be known until it's
-    actually taken during the heist.
+    actually taken during the heist. `fixedValue` was $122,500 (the
+    $105k-140k community range, averaged) until 2026-08-03, when the user
+    reported the truck's real value running lower than that average in
+    practice — it's now a deliberately pessimistic $110,000 for optimizer
+    math, and unlike the averaged figure before it, this number is
+    **never shown to the user on `index.html`**: the checkbox's own label
+    just reads "Scoped", not a dollar amount, since it's a planning
+    assumption rather than a confirmed real value worth anchoring on.
+    (`guide.html`'s results/manifest screen is unaffected by this and
+    still shows the item's actual dollar contribution like any other
+    packed item.)
+  - **`scopeNote`** (currently only on `BAY`) — reminder-only metadata
+    rendered inline under an item's name on `index.html` whenever
+    present, generic to any catalog item (not a hardcoded `itemId`
+    check). `BAY`'s note warns the crate isn't guaranteed to exist at
+    all (the truck doesn't always spawn) — distinct from `requiresPreps`
+    below, which is about needing a prep mission for an item that IS
+    always there.
   - **`requiresPreps` (e.g. `["glass-cutter"]`)** — reminder-only metadata
     on four items (`0-A`, `2-B`, `2-C`, `2-K`) that need a prep mission to
     actually be lootable in-game. This does **not** gate the optimizer —
@@ -68,8 +87,9 @@ Both pages are `type="module"` and `import` directly from `js/kch-model.js`
 `js/kch-model.js` is a pure ES module — no `document`, `fetch`, or
 `localStorage` anywhere in it — holding `packBins()`, `knapsack()`,
 `assignItemsToBags()`, `calcPrimary()`, `bonusAmounts()`, `itemById()`,
-`runOptimizer()`, `computeGuideTake()`, `packedPrepWarnings()`, `money()`,
-and the `serializeState`/`deserializeState`/`mergeLootByItemId`
+`runOptimizer()`, `computeGuidePayout()`, `computeCareerProgress()`,
+`packedPrepWarnings()`, `money()`, and the
+`serializeState`/`deserializeState`/`mergeLootByItemId`
 persistence helpers. Both pages and the Node test suite (`test/*.test.js`,
 run via `node --test`) import this same file, so there is exactly one
 implementation of the optimizer logic. A marked-and-scoped Buyer's Choice
@@ -84,10 +104,16 @@ forfeited).
 logic" below for why. `knapsack()` (plain single-bag 0/1 knapsack) and
 `assignItemsToBags()` (First-Fit-Decreasing bin pack) are kept as
 standalone, independently-tested primitives even though production
-selection no longer calls them: `knapsack()` is still exactly the
-building block the future Greedy model needs for its "stack the host's
-bag first" step (see Roadmap), and `assignItemsToBags()`'s host-routing
-tie-break behavior is covered directly by `test/bin-packing.test.js`.
+selection no longer calls them. `knapsack()` was originally kept as the
+building block a future "Greedy" model would need for its "stack the
+host's bag first" step — that model is now deprioritized (2026-08-02):
+the even-split payout confirmation (see below) means stacking value into
+one bag has zero effect on anyone's career progress, so Greedy no longer
+has a rationale (see `internal/model-notes.md`'s "Greedy" section for the
+full history). Both primitives stay only as tested building blocks now —
+`knapsack()` for single-bag allocation, `assignItemsToBags()`'s
+host-routing tie-break behavior covered directly by
+`test/bin-packing.test.js` — not because Greedy is still on the roadmap.
 
 ## Persistence
 Page 1 inputs (primary target, difficulty, weekly status, players, loot
@@ -137,48 +163,99 @@ confirmation dialog on unlock.
   reachable marked items aren't force-included either, since forfeiture
   is already locked in and forcing them could only cost bag value for a
   bonus that can't pay out.
-- **Normal model has a slight, best-effort host-routing preference**:
-  `Second`/`Crisp Gallery` items get first crack at placement among the
-  optional pool, and every item prefers bin 0 (the host) on a tie — not a
-  hard override, if the host's bag is genuinely full the item still lands
-  elsewhere normally. This only affects *who carries what*, never *which*
-  items get chosen or the total secondary value. See
-  `internal/model-notes.md`'s "Clarified model definitions" for why (this
-  is what the notebook calls "EMP," baked into Normal as a standing
-  default rather than a separate toggle).
-- **Buyer's Choice is conditional on Elite Challenge.** Marking up to three
-  (fewer is fine) items as Buyer's Choice only affects packing when Elite
-  Challenge is toggled on. With Elite off, Buyer's Choice tags are purely
-  informational (still shown in the manifest) and the optimizer runs a
-  single unconstrained pack over all scoped items to maximize bag value
-  — no forced inclusion, no Buyer's Request/Elite bonus, no overflow state.
-- **Buyer's Request and Elite Challenge bonuses double on Hard mode**: $50k
-  Buyer's Request / $50k-per-player Elite on Normal, $100k / $100k-per-player
-  on Hard.
-- **Payout is split per player, not shown as one crew total.** `packBins()`
-  above decides both *which* secondary items get packed AND which
-  individual player bag (capacity 100 each) each one lands in, in a single
-  pass — index 0 is always "the host." Host = Primary Target + their bag − the repeat-run fee
-  (host-only cost); players 2–4 = their bag only. If Buyer's Request/Elite
-  are earned, **every player gets the full bonus amount each**, not a split
-  pool.
+- **Bag assignment follows a four-tier, value-preserving preference**
+  (rewritten 2026-08-02, extended 2026-08-03): `packBins()`'s
+  reconstruction step chooses *which bin* an item lands in — never which
+  items get chosen or the total secondary value — by, in order: (1)
+  `Crisp Gallery` items prefer the host's bag specifically (the one
+  narrow, deliberate exception — the host is the more reliable player to
+  verify in-room presence when using an EMP, given known desync behavior
+  in that specific room; does not extend to `Second`); (2) otherwise,
+  prefer a bin that already contains an item on the same floor (general
+  floor-clustering, so a crew spends less time running between floors);
+  (3) otherwise, prefer a bin that already contains an item on an
+  *adjacent* floor per the real Kortz Center map (`Alarm Floor`↔`First`,
+  `First`↔`Second`, `First`↔`Crisp Gallery`, `Second`↔`Crisp Gallery`;
+  `Vault` and `Loading Bay` are isolated, adjacent to nothing including
+  each other) — a softer nudge than exact-floor clustering, added after
+  live testing showed a player routed straight from `Alarm Floor` to
+  `Second`, skipping past `First`; (4) otherwise, prefer whichever bin
+  has the most remaining capacity (spreads items across players by
+  default). All four tiers only ever choose among bins already confirmed
+  to preserve the optimizer's optimal total value — none of this can
+  cost secondary value, and each tier falls through to the next when no
+  value-preserving bin satisfies it, exactly like tier 1's host-bag
+  fallback. Tier 1 traces to an earlier version that tried bin 0 first
+  for literally *every* item (mandatory and optional alike), which is
+  why Buyer's Choice loot used to land entirely in the host's bag — a
+  real bug, not a rule.
+  `assignItemsToBags()` (the separate, unused-in-production
+  First-Fit-Decreasing primitive — originally kept for a possible future
+  "Greedy" model, since deprioritized, see `internal/model-notes.md`)
+  still has its own, untouched `HOST_PRIORITY_FLOORS`/
+  `HOST_PRIORITY_BOOST` logic bundling `Second`+`Crisp Gallery` — see
+  `internal/model-notes.md`'s "Clarified model definitions" for the
+  original "EMP" rationale that logic still reflects.
+- **Buyer's Choice is conditional on Elite Challenge, and needs at least
+  2 picks.** Marking up to three items as Buyer's Choice only affects
+  packing when Elite Challenge is toggled on. With Elite off, Buyer's
+  Choice tags are purely informational (still shown in the manifest) and
+  the optimizer runs a single unconstrained pack over all scoped items to
+  maximize bag value — no forced inclusion, no Buyer's Request/Elite
+  bonus, no overflow state. **A single marked item can never satisfy
+  Elite Challenge** (confirmed 2026-08-03, direct game knowledge) — 0 and
+  1 marked-and-scoped picks resolve identically to "not attempted" (same
+  unconstrained pack, no bonus), only 2 or 3 actually lock packing and
+  put the bonuses in play. `guide.html` shows an explicit warning for
+  both the 0- and 1-pick case (one shared message, parameterized only by
+  the count) rather than leaving it inferable only from the Finale
+  Result's "not attempted" label.
+- **Buyer's Request, Elite Challenge, and Helper bonuses all double on
+  Hard mode**: $50k Buyer's Request / $50k-per-player Elite / $100k
+  Helper on Normal, $100k / $100k-per-player / $200k on Hard.
+- **Every player's secondary-loot cut is identical, and bag contents are
+  economically irrelevant.** Confirmed 2026-08-02 against two real GTA
+  payout screenshots: each player's share is `secondaryBagValue /
+  players`, split evenly regardless of which bag any specific item
+  physically landed in — bag/floor assignment (see above) is pure
+  logistics with zero effect on payout. Host additionally gets the
+  Primary Target value. **Every non-host player (P2–P4) unconditionally
+  earns the flat Helper bonus** on top of everything else — not a
+  per-run toggle, a fixed rule of the model (the all-even-split scenario
+  from one of the two reference screenshots is deliberately no longer
+  representable). If Buyer's Request is earned, every player gets the
+  full bonus amount each, not a split pool. The repeat-run planning fee
+  is a host-only cost, but is **not** netted against any player's payout
+  (see below) — it's disclosed separately in the "Finale Result" ledger.
+- **A per-player "Career Progress" figure exists, fulfilling the
+  "deferred to a later round" note below.** `computeCareerProgress()` in
+  `kch-model.js`: host = Primary Target + secondary share; everyone else
+  = secondary share only. It excludes **every** bonus — Buyer's Request,
+  Elite, and Helper alike — for every player, host included. This is
+  deliberately a *different* number from Payout (below), rendered as its
+  own, visually distinct line in each player's card on `guide.html`.
 - **No combined "Total Take (Career Progress)" headline.** One used to
   show `primary.value + secondaryBagValue` (the crew-wide combined bag
   total), but the PM confirmed (2026-07-26, direct game knowledge) that
-  career progress is actually tracked per-player/per-bag — as host, it's
-  your primary plus only *your own* bag, not the crew's combined total. The
-  old line was removed as actively misleading rather than left in place;
-  a correct per-player replacement is deferred to a later round. Don't
-  reintroduce a combined-total headline without that per-player fix.
-- **Page 2's per-player "Take" figure shows the Buyer's Request bonus but
-  never projects the Elite Challenge bonus dollar amount**, even when one
-  is earned at the model level. The Elite toggle still correctly makes
-  Buyer's Choice mandatory for packing (an optimizer concern); omitting its
-  bonus from the displayed Take is display-only, because Elite success
-  depends on live-execution conditions (the 17-minute clock, etc.) this
-  tool can't model or guarantee. `computeGuideTake()` in `kch-model.js` is
-  the single source of truth for this total — it takes `buyerRequestBonusEach`
-  only, never `eliteBonusEach`.
+  career progress is actually tracked per-player, not the crew's combined
+  total. The old line was removed as actively misleading rather than left
+  in place. The per-player replacement that note deferred is the Career
+  Progress figure above — don't reintroduce a crew-wide combined-total
+  headline; the correct shape for this number is per-player.
+- **Page 2's per-player "Payout" figure (renamed from "Take" 2026-08-02 —
+  it's the amount that actually hits the wallet) shows the Buyer's
+  Request bonus but never projects the Elite Challenge bonus dollar
+  amount**, even when one is earned at the model level. The Elite toggle
+  still correctly makes Buyer's Choice mandatory for packing (an
+  optimizer concern); omitting its bonus from Payout is display-only,
+  because Elite success depends on live-execution conditions (the
+  17-minute clock, etc.) this tool can't model or guarantee — `guide.html`
+  instead shows a small note under Payout naming the exact dollar amount
+  Elite would add on success. `computeGuidePayout()` in `kch-model.js` is
+  the single source of truth for this total — it takes `secondaryShareEach`
+  (never an individual bag's value), `buyerRequestBonusEach`, and
+  `helperBonusEach` for non-hosts, but never `eliteBonusEach` and never
+  the repeat-run planning fee.
 
 ## Known open questions (confirm before shipping)
 - The source payout table also included values for runs where witnesses/CCTV

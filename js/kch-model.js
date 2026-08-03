@@ -19,6 +19,8 @@ export const DEFAULT_BONUS_CONSTANTS = {
   buyerRequestHard: 100000,
   elitePerPlayerNormal: 50000,
   elitePerPlayerHard: 100000,
+  helperNormal: 100000,
+  helperHard: 200000,
   repeatRunFee: 100000
 };
 
@@ -35,12 +37,14 @@ export function itemById(catalog, itemId) {
 }
 
 // ---------- bonus math ----------
-// Buyer's Request and Elite Challenge bonuses double on Hard mode.
+// Buyer's Request, Elite Challenge, and the Helper bonus all double on
+// Hard mode.
 export function bonusAmounts(difficulty, bonusConstants) {
   const hard = difficulty === 'hard';
   return {
     buyerRequest: hard ? bonusConstants.buyerRequestHard : bonusConstants.buyerRequestNormal,
-    elitePerPlayer: hard ? bonusConstants.elitePerPlayerHard : bonusConstants.elitePerPlayerNormal
+    elitePerPlayer: hard ? bonusConstants.elitePerPlayerHard : bonusConstants.elitePerPlayerNormal,
+    helper: hard ? bonusConstants.helperHard : bonusConstants.helperNormal
   };
 }
 
@@ -143,32 +147,86 @@ function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 // item ever broke that pattern; see the "power drill loot" note in
 // secondary-loot.json's _notes for why that's not expected.
 //
-// `opts.boostFloors`, if given, lets certain floors' items get first
-// crack at placement among the optional pool — mirrors the Normal
-// model's best-effort host-routing preference (bin 0 is always tried
-// first for every item on a tie, same as assignItemsToBags; putting
-// boosted-floor items earlier in processing order just means they get
-// that first-crack tie-break before bin 0 fills up with other stuff).
+// Bin CHOICE during reconstruction (below) follows a four-tier
+// preference, applied uniformly to mandatory and optional items alike —
+// this replaced an earlier version (2026-08-02) that tried bin 0 first
+// for literally every item, which is why Buyer's Choice loot always used
+// to land entirely in the host's bag (a real bug, not a rule: mandatory
+// items are processed first, while bins are still symmetric, so bin 0
+// won that tie almost every time). All four tiers only ever choose
+// AMONG bins already confirmed (via `solve()`) to preserve the DP's
+// optimal total value — none of this can ever cost secondary value,
+// which matters because every player's career progress is driven by
+// that same total (see computeCareerProgress below), split evenly:
+//   1. Crisp Gallery items prefer bin 0 (the host) — the one deliberate,
+//      narrowly-scoped exception, confirmed with the user 2026-08-02:
+//      the host is the more reliable player to verify in-room presence
+//      when using an EMP, given known desync behavior in that specific
+//      room. Does NOT extend to Second — that floor gets no special
+//      treatment now, just tier 2 like every other floor.
+//   2. Otherwise, prefer a bin that already contains an item sharing the
+//      same `.floor` — general floor-clustering, so a crew spends less
+//      time running between floors to collect their assigned loot.
+//      Items with `floor === undefined` never match each other here.
+//   3. Otherwise, prefer a bin that already contains an item on an
+//      ADJACENT floor per FLOOR_ADJACENCY below (e.g. Alarm Floor next
+//      to First, or First next to Second/Crisp Gallery) — a softer nudge
+//      than tier 2, confirmed with the user 2026-08-03 after live
+//      testing showed a player jumping straight from Alarm Floor to
+//      Second, skipping past First. This is a soft preference, not a
+//      guarantee: if no value-preserving adjacent-floor bin exists at
+//      this point in the reconstruction, it falls through to tier 4
+//      exactly like the Crisp Gallery tier falls through when the
+//      host's bag is full. Vault and Loading Bay are isolated — never
+//      adjacent to anything, including each other.
+//   4. Otherwise, prefer whichever candidate bin has the most remaining
+//      capacity — spreads items across players by default instead of
+//      piling into bin 0, which is what actually fixes the reported bug
+//      in the common case (a plain ascending-index fallback would not
+//      have, since it's indistinguishable from the old bug there).
+//   5. Exact remaining-capacity ties: ascending bin index, purely for
+//      determinism — no longer a host-favoring rule, just a tiebreaker.
 //
 // Returns null if `mandatory` alone can't be packed into the bins at
 // all (the caller's cue to forfeit and fall back to an unconstrained
 // pack). Otherwise returns { value, bags }: bags is a `bins`-length
 // array of { items, value, weightUsed }, items shaped like the input
 // objects ({ id, value, weightUnits, floor }).
-export function packBins(mandatory, optional, bins, capacityPerBin, opts = {}) {
-  const boostFloors = opts.boostFloors || new Set();
+//
+// Note: `assignItemsToBags()` above has its own, separate
+// HOST_PRIORITY_FLOORS/HOST_PRIORITY_BOOST logic (still bundling Second
+// + Crisp Gallery) — that function is untouched by this change, kept
+// only as a tested primitive for a possible future "Greedy" model. The
+// CRISP_GALLERY constant below is intentionally its own thing, even
+// though it overlaps that set on one floor name.
+const CRISP_GALLERY = 'Crisp Gallery';
 
+// Real Kortz Center map adjacency (confirmed with the user 2026-08-03):
+// which floors are a single transition apart. Used only as tier 3 above —
+// a soft logistics nudge, never a hard constraint or an economic one.
+// Vault and Loading Bay are isolated (no adjacency to anything, including
+// each other) since neither borders the Alarm Floor/First/Second/Crisp
+// Gallery run of the building.
+const FLOOR_ADJACENCY = {
+  'Alarm Floor': new Set(['First']),
+  'First': new Set(['Alarm Floor', 'Second', 'Crisp Gallery']),
+  'Second': new Set(['First', 'Crisp Gallery']),
+  'Crisp Gallery': new Set(['First', 'Second']),
+  'Vault': new Set(),
+  'Loading Bay': new Set()
+};
+function floorsAdjacent(a, b) {
+  return a !== undefined && b !== undefined && !!FLOOR_ADJACENCY[a] && FLOOR_ADJACENCY[a].has(b);
+}
+
+export function packBins(mandatory, optional, bins, capacityPerBin) {
   const allWeights = [...mandatory, ...optional].map(i => i.weightUnits).filter(w => w > 0);
   const unit = allWeights.reduce((g, w) => gcd(g, w), capacityPerBin);
   const cap = Math.round(capacityPerBin / unit);
 
-  const optionalOrdered = [
-    ...optional.filter(it => boostFloors.has(it.floor)),
-    ...optional.filter(it => !boostFloors.has(it.floor))
-  ];
   const items = [
     ...mandatory.map(it => ({ ...it, w: it.weightUnits / unit, mandatory: true })),
-    ...optionalOrdered.map(it => ({ ...it, w: it.weightUnits / unit, mandatory: false }))
+    ...optional.map(it => ({ ...it, w: it.weightUnits / unit, mandatory: false }))
   ];
 
   const NEG = -Infinity;
@@ -202,8 +260,9 @@ export function packBins(mandatory, optional, bins, capacityPerBin, opts = {}) {
   if (totalValue === NEG) return null;
 
   // Reconstruct one concrete assignment matching that optimal value,
-  // preferring bin 0 (the host) on ties, same as the old FFD's
-  // `bags.find` (checks bag 0 first) always did.
+  // choosing among value-preserving bins via the four-tier preference
+  // documented above (Crisp-Gallery-to-host, then floor-clustering, then
+  // adjacent-floor-clustering, then least-loaded, then ascending index).
   const bagsOut = Array.from({ length: bins }, () => ({ items: [], value: 0, weightUsed: 0 }));
   let caps = initCaps.slice();
   for (let i = 0; i < items.length; i++) {
@@ -211,18 +270,34 @@ export function packBins(mandatory, optional, bins, capacityPerBin, opts = {}) {
     const target = solve(i, caps);
     if (!it.mandatory && solve(i + 1, caps) === target) continue; // optimal path leaves this item out
 
+    const candidates = [];
     for (let b = 0; b < bins; b++) {
       if (caps[b] < it.w) continue;
       const next = caps.slice();
       next[b] -= it.w;
-      if (it.value + solve(i + 1, next) === target) {
-        bagsOut[b].items.push({ id: it.id, value: it.value, weightUnits: it.weightUnits, floor: it.floor });
-        bagsOut[b].value += it.value;
-        bagsOut[b].weightUsed += it.weightUnits;
-        caps = next;
-        break;
-      }
+      if (it.value + solve(i + 1, next) === target) candidates.push({ b, next });
     }
+
+    let chosen;
+    if (it.floor === CRISP_GALLERY) {
+      chosen = candidates.find(c => c.b === 0);
+    }
+    if (!chosen && it.floor !== undefined) {
+      const floorMatches = candidates.filter(c => bagsOut[c.b].items.some(x => x.floor === it.floor));
+      chosen = floorMatches.reduce((best, c) => (!best || caps[c.b] > caps[best.b]) ? c : best, null);
+    }
+    if (!chosen && it.floor !== undefined) {
+      const adjMatches = candidates.filter(c => bagsOut[c.b].items.some(x => floorsAdjacent(it.floor, x.floor)));
+      chosen = adjMatches.reduce((best, c) => (!best || caps[c.b] > caps[best.b]) ? c : best, null);
+    }
+    if (!chosen) {
+      chosen = candidates.reduce((best, c) => (!best || caps[c.b] > caps[best.b]) ? c : best, null);
+    }
+
+    bagsOut[chosen.b].items.push({ id: it.id, value: it.value, weightUnits: it.weightUnits, floor: it.floor });
+    bagsOut[chosen.b].value += it.value;
+    bagsOut[chosen.b].weightUsed += it.weightUnits;
+    caps = chosen.next;
   }
 
   return { value: totalValue, bags: bagsOut };
@@ -232,6 +307,9 @@ export function packBins(mandatory, optional, bins, capacityPerBin, opts = {}) {
 // Buyer's Choice items are locked in first (mandatory) only when Elite
 // Challenge is attempted; with Elite off, Buyer's Choice tags are purely
 // informational and the optimizer runs a single unconstrained knapsack.
+// "Attempted" itself requires at least 2 marked-and-scoped Buyer's Choice
+// items (2026-08-03) — Elite Challenge can never be satisfied by a single
+// pick, so 0 or 1 marked both resolve identically to "not attempted."
 //
 // A marked-and-scoped Buyer's Choice item that this crew size can't even
 // access (item.minPlayers > state.players) can never actually be picked
@@ -260,9 +338,12 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
     .filter(l => itemById(catalog, l.itemId).minPlayers > state.players)
     .map(l => l.itemId);
 
-  const attempted = state.elite === 'yes' && bcIdsSet.size > 0;
+  // Elite Challenge requires at least 2 Buyer's Choice picks to be a real
+  // contract (confirmed 2026-08-03, direct game knowledge) — a single
+  // marked item can never satisfy it. Below that threshold, treat it
+  // identically to marking none: no forced packing, no bonus.
+  const attempted = state.elite === 'yes' && bcIdsSet.size >= 2;
   const canLockMandatory = attempted && bcIneligibleIds.length === 0;
-  const packOpts = { boostFloors: HOST_PRIORITY_FLOORS };
 
   let secondaryBagValue, allBuyerItemsFit, mandatoryWeightSum, packedBags;
 
@@ -271,7 +352,7 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
     const optional = eligible.filter(l => !l.buyersChoice).map(toItem);
     mandatoryWeightSum = mandatory.reduce((s, i) => s + i.weightUnits, 0);
 
-    const packed = packBins(mandatory, optional, state.players, bagCapacityPerPlayer, packOpts);
+    const packed = packBins(mandatory, optional, state.players, bagCapacityPerPlayer);
     if (packed) {
       allBuyerItemsFit = true;
       secondaryBagValue = packed.value;
@@ -281,7 +362,7 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
       // forfeit the bonuses and fall back to the exact same unconstrained
       // value-max pack used when Elite isn't attempted at all.
       allBuyerItemsFit = false;
-      const fallback = packBins([], eligible.map(toItem), state.players, bagCapacityPerPlayer, packOpts);
+      const fallback = packBins([], eligible.map(toItem), state.players, bagCapacityPerPlayer);
       secondaryBagValue = fallback.value;
       packedBags = fallback.bags;
     }
@@ -290,7 +371,7 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
     // marked item — either way, no Buyer's Choice weighting applied to
     // packing. Pure value-max pack over everything eligible.
     mandatoryWeightSum = 0;
-    const packed = packBins([], eligible.map(toItem), state.players, bagCapacityPerPlayer, packOpts);
+    const packed = packBins([], eligible.map(toItem), state.players, bagCapacityPerPlayer);
     secondaryBagValue = packed.value;
     packedBags = packed.bags;
 
@@ -307,6 +388,15 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
   const buyerRequestBonusEach = eliteEligible ? bonuses.buyerRequest : 0;
   const eliteBonusEach = eliteEligible ? bonuses.elitePerPlayer : 0;
   const planningFee = state.weekly === 'repeat' ? bonusConstants.repeatRunFee : 0;
+  // Every player's secondary-loot cut is the SAME number — the pooled
+  // total split evenly across the whole crew — regardless of which bag
+  // any specific item physically landed in (confirmed 2026-08-02 against
+  // two real GTA payout screenshots). Bag/floor assignment above is pure
+  // logistics with zero economic effect on this. Every non-host player
+  // additionally, unconditionally earns the flat Helper bonus on top of
+  // everything else — not a per-run choice, a fixed rule of the model.
+  const secondaryShareEach = secondaryBagValue / state.players;
+  const helperBonusEach = bonuses.helper;
 
   const overflow = attempted && !allBuyerItemsFit;
 
@@ -320,24 +410,51 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
   }));
 
   return {
-    secondaryBagValue, buyerRequestBonusEach, eliteBonusEach, planningFee,
+    secondaryBagValue, secondaryShareEach, buyerRequestBonusEach, eliteBonusEach,
+    helperBonusEach, planningFee,
     overflow, attempted, allBuyerItemsFit, mandatoryWeightSum, bcIneligibleIds,
     chosenIds, bcIdsSet, bags,
     ineligibleCount: valid.length - eligible.length
   };
 }
 
-// Page 2's per-player "Take" figure = bag value + Buyer's Request bonus
-// ONLY. The Elite Challenge toggle still correctly makes Buyer's Choice
-// mandatory for packing (see runOptimizer above) — but its bonus dollar
-// amount must never be folded into this total, since Elite success
-// depends on live-execution conditions (the clock, etc.) the tool can't
-// model or guarantee. Host adds the primary target value and subtracts
-// the repeat-run fee; non-hosts don't.
-export function computeGuideTake({ bagValue, isHost, primaryValue, planningFee, buyerRequestBonusEach }) {
-  let take = bagValue + buyerRequestBonusEach;
-  if (isHost) take += primaryValue - planningFee;
-  return take;
+// Page 2's per-player "Payout" figure (renamed from "Take" 2026-08-02 —
+// it's the amount that actually hits the wallet) = secondaryShareEach +
+// Buyer's Request bonus, PLUS the Helper bonus for every non-host player,
+// PLUS the Primary Target for the host. The Elite Challenge bonus is
+// deliberately never folded in here — its dollar amount must never be
+// projected, since Elite success depends on live-execution conditions
+// (the clock, etc.) the tool can't model or guarantee. `secondaryShareEach`
+// (not an individual bag's value) is the correct input for every player,
+// host included — bag assignment has no economic effect on payout, see
+// runOptimizer above.
+//
+// The repeat-run planning fee is deliberately NOT subtracted here
+// (2026-08-02, user call): it's paid up front to set up a repeat run,
+// before the heist itself — by the time this payout screen matters, it's
+// already a sunk cost, a separate transaction from what the heist pays
+// out. It's still shown as its own informational line in guide.html so
+// the host isn't left wondering where it went, just never netted against
+// Payout.
+export function computeGuidePayout({ secondaryShareEach, isHost, primaryValue, buyerRequestBonusEach, helperBonusEach }) {
+  let payout = secondaryShareEach + buyerRequestBonusEach;
+  if (isHost) {
+    payout += primaryValue;
+  } else {
+    payout += helperBonusEach;
+  }
+  return payout;
+}
+
+// Career progress is tracked per-player in-game and excludes EVERY bonus
+// (Buyer's Request, Elite, and the Helper bonus) — only the Primary
+// Target and secondary loot share count toward it. Confirmed 2026-08-02
+// via two real GTA payout screenshots. Kept as its own function rather
+// than a mode flag on computeGuidePayout(): the two figures have
+// entirely different bonus-inclusion rules, and a single function would
+// need a confusing superset of params to serve both.
+export function computeCareerProgress({ secondaryShareEach, isHost, primaryValue }) {
+  return isHost ? primaryValue + secondaryShareEach : secondaryShareEach;
 }
 
 // Reminder-only check (2026-07-26): some catalog items carry a

@@ -66,6 +66,16 @@ test('sample-run fixture at 1 player: illegal combo is flagged, not crashed or s
   assert.equal(r.bags.length, 1);
 });
 
+for (const players of fixture.testPlayerCounts) {
+  test(`sample-run fixture at ${players} players: secondaryShareEach and helperBonusEach are correct`, () => {
+    const state = stateForPlayers(players);
+    const r = runOptimizer(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+    assert.equal(r.secondaryShareEach, r.secondaryBagValue / players);
+    const expectedHelper = state.difficulty === 'hard' ? DEFAULT_BONUS_CONSTANTS.helperHard : DEFAULT_BONUS_CONSTANTS.helperNormal;
+    assert.equal(r.helperBonusEach, expectedHelper);
+  });
+}
+
 test('sample-run fixture at 1 player: reachable Buyer\'s Choice items are NOT force-locked once the pick is already illegal', () => {
   // Regression test for the "drop Buyer's Choice weighting entirely" fix:
   // 2-H is unreachable solo, which already guarantees forfeiture — 1-D and
@@ -87,3 +97,38 @@ test('sample-run fixture at 1 player: reachable Buyer\'s Choice items are NOT fo
   assert.equal(r.secondaryBagValue, expected.value);
   assert.deepEqual([...r.chosenIds].sort(), [...expected.chosenIds].sort());
 });
+
+// Regression coverage for the 2026-08-03 fix: Elite Challenge needs at
+// least 2 Buyer's Choice picks to ever be a real contract — 0 and 1 must
+// resolve identically ("not attempted"), and 2/3 must work as before.
+function stateWithBcCount(count) {
+  const bcIds = catalog.filter(c => c.minPlayers <= 3 && c.valueType !== 'checkbox').slice(0, count).map(c => c.itemId);
+  return {
+    primaryId: 'la-derniere-debauche', difficulty: 'normal', weekly: 'first',
+    players: 3, elite: 'yes',
+    loot: catalog.map(cat => ({
+      itemId: cat.itemId,
+      value: cat.minPlayers <= 3 ? 50000 : '',
+      buyersChoice: bcIds.includes(cat.itemId)
+    }))
+  };
+}
+
+for (const count of [0, 1]) {
+  test(`Elite Challenge with ${count} Buyer's Choice pick(s): not attempted, no bonus`, () => {
+    const state = stateWithBcCount(count);
+    const r = runOptimizer(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+    assert.equal(r.attempted, false);
+    assert.equal(r.overflow, false);
+    assert.equal(r.buyerRequestBonusEach, 0);
+    assert.equal(r.eliteBonusEach, 0);
+  });
+}
+
+for (const count of [2, 3]) {
+  test(`Elite Challenge with ${count} Buyer's Choice picks: attempted normally`, () => {
+    const state = stateWithBcCount(count);
+    const r = runOptimizer(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+    assert.equal(r.attempted, true);
+  });
+}

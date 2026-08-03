@@ -93,6 +93,137 @@ test('the real 3-player catalog combo that originally overflowed a bag now packs
   }
 });
 
+// Regression coverage for the 2026-08-02 reconstruction rewrite: bin
+// CHOICE now follows a three-tier preference (Crisp-Gallery-to-host, then
+// general floor-clustering, then least-loaded-bin) instead of always
+// trying bin 0 first — the old behavior was why Buyer's Choice loot
+// always ended up entirely in the host's bag.
+
+test('floor-clustering: same-floor items land together, and spread to a fresh bin only when there is no floor match', () => {
+  const mandatory = [{ id: 'A', value: 100, weightUnits: 20, floor: 'Vault' }];
+  const optional = [
+    { id: 'B', value: 50, weightUnits: 20, floor: 'Vault' },
+    { id: 'C', value: 50, weightUnits: 20, floor: 'Second' },
+  ];
+  const result = packBins(mandatory, optional, 3, 100);
+  assert.ok(result);
+  assert.equal(result.value, 200);
+
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.equal(bagOf('A'), bagOf('B'), 'A and B share a floor and should land in the same bag');
+  assert.notEqual(bagOf('C'), bagOf('A'), 'C is on a different floor and should not pile into the same bag');
+});
+
+test('items with no floor field never spuriously cluster via undefined === undefined', () => {
+  const optional = [
+    { id: 'X', value: 100, weightUnits: 50 },
+    { id: 'Y', value: 100, weightUnits: 50 },
+  ];
+  const result = packBins([], optional, 2, 100);
+  assert.ok(result);
+  assert.equal(result.value, 200);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.notEqual(bagOf('X'), bagOf('Y'), 'floorless items should spread via least-loaded, not cluster on undefined');
+});
+
+test('anti-host-bias regression: mandatory items on different floors spread across bins instead of piling into bin 0', () => {
+  // Floors must be mutually non-adjacent for this test to isolate the
+  // least-loaded fallback (tier 4) from the newer adjacent-floor tier
+  // (tier 3, added 2026-08-03) — First and Alarm Floor are now
+  // intentionally adjacent, so they'd legitimately cluster together on
+  // purpose and this assertion would no longer hold for that pair.
+  const mandatory = [
+    { id: 'A', value: 100, weightUnits: 20, floor: 'Vault' },
+    { id: 'B', value: 100, weightUnits: 20, floor: 'Loading Bay' },
+    { id: 'C', value: 100, weightUnits: 20, floor: 'Alarm Floor' },
+  ];
+  const result = packBins(mandatory, [], 3, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  const bins = [bagOf('A'), bagOf('B'), bagOf('C')];
+  assert.equal(new Set(bins).size, 3, `expected 3 mandatory items on 3 mutually non-adjacent floors to spread across 3 different bins, got ${bins}`);
+});
+
+test('floor-clustering outranks the least-loaded fallback', () => {
+  // Bin 0 is left with only 50 remaining after A; bin 1 is still empty
+  // (100 remaining) and would win on pure least-loaded grounds — but B
+  // shares A's floor, so it should still join bin 0 anyway.
+  const mandatory = [{ id: 'A', value: 100, weightUnits: 50, floor: 'Vault' }];
+  const optional = [{ id: 'B', value: 50, weightUnits: 20, floor: 'Vault' }];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.equal(bagOf('B'), bagOf('A'), 'same-floor item should cluster with A despite bin 1 being emptier');
+});
+
+test('Crisp Gallery items prefer the host bin even when least-loaded would pick elsewhere', () => {
+  const mandatory = [{ id: 'A', value: 500, weightUnits: 80, floor: 'Vault' }];
+  const optional = [{ id: 'G', value: 50, weightUnits: 10, floor: 'Crisp Gallery' }];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  assert.equal(result.value, 550, 'the Crisp Gallery preference must not cost any value');
+  assert.ok(result.bags[0].items.some(i => i.id === 'G'), 'Crisp Gallery item should land with the host despite bin 0 having far less room than bin 1');
+});
+
+test('Crisp Gallery preference falls through gracefully when the host bin truly has no room', () => {
+  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'Vault' }]; // fills bin 0 completely
+  const optional = [{ id: 'G', value: 50, weightUnits: 10, floor: 'Crisp Gallery' }];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  assert.equal(result.value, 1050, 'the Crisp Gallery item should still be packed, just not with the host');
+  assert.ok(result.bags[1].items.some(i => i.id === 'G'), 'Crisp Gallery item should fall through to a non-host bin, not be dropped');
+});
+
+// Regression coverage for the 2026-08-03 adjacent-floor tie-break: a
+// softer nudge, ranked below exact-floor-match and above least-loaded,
+// for clustering items whose floors are one real-map transition apart
+// (Alarm Floor<->First<->Second/Crisp Gallery) even when they don't
+// share an identical floor string.
+
+test('adjacent-floor items cluster together over an emptier, unrelated bin', () => {
+  // Bin 0 (First) is left with 50 remaining after A; bin 1 is empty (100
+  // remaining) and would win on pure least-loaded grounds — but B is on
+  // Second, which is adjacent to First, so it should still join bin 0.
+  const mandatory = [{ id: 'A', value: 100, weightUnits: 50, floor: 'First' }];
+  const optional = [{ id: 'B', value: 50, weightUnits: 20, floor: 'Second' }];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.equal(bagOf('B'), bagOf('A'), 'adjacent-floor item should cluster with A despite bin 1 being emptier');
+});
+
+test('exact-floor match still outranks adjacent-floor match', () => {
+  // Bin 0 holds a First item, bin 1 holds a Second item. C is on Second:
+  // bin 1 is an exact match, bin 0 is only adjacent — exact match wins.
+  const mandatory = [
+    { id: 'A', value: 100, weightUnits: 20, floor: 'First' },
+    { id: 'B', value: 100, weightUnits: 20, floor: 'Second' },
+  ];
+  const optional = [{ id: 'C', value: 50, weightUnits: 20, floor: 'Second' }];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.equal(bagOf('C'), bagOf('B'), 'exact-floor match (Second/Second) should win over merely-adjacent (First/Second)');
+});
+
+test('isolated floors (Vault, Loading Bay) never soft-cluster with anything', () => {
+  const mandatory = [{ id: 'A', value: 100, weightUnits: 50, floor: 'Alarm Floor' }];
+  const optional = [{ id: 'B', value: 50, weightUnits: 20, floor: 'Vault' }];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.notEqual(bagOf('B'), bagOf('A'), 'Vault is isolated and should not adjacency-cluster with Alarm Floor');
+});
+
+test('adjacent-floor preference falls through gracefully when the only adjacent bin has no room', () => {
+  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'First' }]; // fills bin 0 completely
+  const optional = [{ id: 'B', value: 50, weightUnits: 10, floor: 'Second' }];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  assert.equal(result.value, 1050, 'the adjacency preference should still pack B, just not with the full bin');
+  assert.ok(result.bags[1].items.some(i => i.id === 'B'), 'adjacent-floor item should fall through to a non-adjacent bin, not be dropped');
+});
+
 // Fuzz test via the real runOptimizer entry point: across many random
 // scope-outs against the real catalog, no player's bag should ever exceed
 // bagCapacityPerPlayer. This is the same search that originally found the

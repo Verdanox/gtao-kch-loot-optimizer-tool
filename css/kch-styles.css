@@ -29,12 +29,33 @@
   --p2-color:#377c47;
   --p3-color:#9b7fd4;
   --p4-color:#c94587;
-  --floor-vault:#b08968;
-  --floor-loading-bay:#7fb069;
-  --floor-alarm-floor:#e0574f;
-  --floor-first:#d9a23f;
-  --floor-second:#4fa3d9;
-  --floor-crisp-gallery:#b06fd9;
+  /* Floor palette (2026-08-03): recomputed jointly against the player
+     palette above, not just among themselves — cross-checking the two
+     systems turned up P1<->First, P2<->Loading Bay, and P4<->Alarm Floor
+     as near-duplicate colors (OKLab ΔE 3-5), and P3<->Vault as a pair
+     that looks fine to normal vision but collapses under simulated
+     red-green colorblindness. Both systems render together in the same
+     player card on guide.html (card border = player, item border =
+     floor), so cross-system separation matters as much as within-system.
+     Floors get a slightly wider lightness band (~0.46-0.70) than the
+     players' 0.48-0.67 — floors are a secondary, decorative accent (the
+     floor name is always printed as text) rather than the primary
+     identity channel player color is, so they can afford to sit a touch
+     darker/lighter for separation room. Fitting 10 categorical colors
+     into one dark-mode-safe band while preserving contrast, thematic hue
+     families (red/gold/green/blue), and player-color compatibility all
+     at once could not hit the ideal 8+/15+ OKLab ΔE separation on every
+     pair — several pairs land in the 6-8 "floor" band instead, legal
+     specifically because a text label (player name, floor heading) is
+     always visible alongside the color, never color-alone
+     identification. Second/Crisp Gallery remain deliberately close to
+     EACH OTHER (same real floor, same map image, see below) at ΔE ~9.5. */
+  --floor-alarm-floor:#d68196;
+  --floor-first:#916000;
+  --floor-loading-bay:#2ba76a;
+  --floor-vault:#41afc3;
+  --floor-second:#3569b4;
+  --floor-crisp-gallery:#1f78f0;
 }
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
@@ -223,6 +244,7 @@ select:focus, input:focus{border-color:var(--gold);}
 .loot-item.bc-locked{opacity:.55; cursor:not-allowed;}
 .loot-name{flex:1; min-width:0; font-size:12.5px; line-height:1.3; color:var(--text);}
 .item-desc{color:var(--muted); font-family:var(--mono); font-size:11px;}
+.item-scope-note{display:block; color:var(--warn); font-family:var(--mono); font-size:10.5px; margin-top:2px; line-height:1.4;}
 .item-controls{display:flex; align-items:center; gap:6px; flex:0 0 auto; cursor:auto;}
 .item-controls input[type="number"]{
   flex:0 0 auto; width:88px;
@@ -469,6 +491,12 @@ dialog.feedback-dialog{
 .player-card .ledger-row{font-size:13px; padding:6px 0;}
 .player-card .ledger-row.total{margin-top:6px; padding-top:10px;}
 .player-card .ledger-row.total .v{font-size:18px;}
+/* Career Progress sits directly below Payout in the same card — teal
+   instead of gold so the two "total"-styled rows read as genuinely
+   different figures, not a repeated/duplicated total. */
+.player-card .ledger-row.total.career{border-top-color:var(--teal); margin-top:2px;}
+.player-card .ledger-row.total.career .k{color:var(--teal);}
+.player-card .ledger-row.total.career .v{color:var(--teal); font-size:16px;}
 
 .warn-box{
   margin:0 22px 18px; padding:10px 12px;

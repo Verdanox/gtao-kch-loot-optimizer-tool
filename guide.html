@@ -76,13 +76,13 @@
     <iframe id="feedbackFrame" title="Feedback form" loading="lazy"></iframe>
   </dialog>
 
-  <p class="footnote">Kortz Center Heist released July 14, 2026. Primary Target payouts, the +10% Hard Mode modifier, the Buyer's Request bonus ($50,000 Normal / $100,000 Hard), the Elite Challenge bonus ($50,000 Normal / $100,000 Hard, per player) and the $100,000 repeat-run planning fee reflect publicly reported figures and may shift with balance updates. The Elite Challenge bonus is never projected here — its success depends on live-execution conditions (the 17-minute clock, etc.) this tool doesn't model.</p>
+  <p class="footnote">Kortz Center Heist released July 14, 2026. Primary Target payouts, the +10% Hard Mode modifier, the Buyer's Request bonus ($50,000 Normal / $100,000 Hard), the Elite Challenge bonus ($50,000 Normal / $100,000 Hard, per player), the Helper bonus ($100,000 Normal / $200,000 Hard, every non-host player) and the $100,000 repeat-run planning fee reflect publicly reported figures and may shift with balance updates. The Elite Challenge bonus is never counted in Payout — its success depends on live-execution conditions (the 17-minute clock, etc.) this tool doesn't model.</p>
 
 </div>
 
 <script type="module">
 import {
-  itemById, money, calcPrimary, runOptimizer, computeGuideTake, packedPrepWarnings,
+  itemById, money, calcPrimary, runOptimizer, computeGuidePayout, computeCareerProgress, packedPrepWarnings,
   defaultPage1State, defaultPage2State, serializeState, deserializeState, mergeLootByItemId,
   DEFAULT_BONUS_CONSTANTS, STORAGE_KEY
 } from './js/kch-model.js';
@@ -218,7 +218,16 @@ function renderBagSection(r){
   // fixed warning-colored chrome; only its *text* needs to distinguish the
   // reason, which it already does below. No genuineOverflow gating here.
   const warnBox = document.getElementById('warnBox');
-  if (r.overflow){
+  // Elite Challenge needs at least 2 Buyer's Choice picks to ever be a
+  // real contract (a single pick can never satisfy it) — checked first
+  // since this isn't an overflow at all (r.overflow is false here, the
+  // pack is genuinely feasible, Elite just isn't in play this run).
+  const bcTooFew = state.elite === 'yes' && r.bcIdsSet.size < 2;
+  if (bcTooFew){
+    warnBox.style.display = 'block';
+    const n = r.bcIdsSet.size;
+    warnBox.textContent = `Elite Challenge needs at least 2 Buyer's Choice picks to be a real contract — you've marked ${n === 0 ? 'none' : 'only 1'}. The ledger optimized for maximum bag value instead; the Buyer's Request and Elite Challenge bonuses aren't in play this run.`;
+  } else if (r.overflow){
     warnBox.style.display = 'block';
     if (r.bcIneligibleIds.length > 0){
       const names = r.bcIneligibleIds.map(id => itemById(LOOT_CATALOG, id).name).join(', ');
@@ -299,12 +308,13 @@ function renderPayoutSection(primary, r){
 
   addLedgerRow(ledger, 'Primary Target', money(primary.value));
   addLedgerRow(ledger, 'Secondary Targets (optimized bag)', money(r.secondaryBagValue));
-  // "Total Take (Career Progress)" (primary.value + r.secondaryBagValue)
-  // was removed 2026-07-26: secondaryBagValue is the crew-wide combined
-  // bag total, but the PM confirmed career progress is tracked
-  // per-player/per-bag in-game — the line showed a number that didn't
-  // represent anyone's actual progress. A correct per-player replacement
-  // is deferred to a later round; for now just don't show a wrong one.
+  // A combined "Total Take (Career Progress)" crew-wide headline was
+  // removed 2026-07-26 as actively misleading (secondaryBagValue is the
+  // crew-wide combined bag total, but career progress is tracked
+  // per-player in-game). The correct per-player figure — now known
+  // (2026-08-02, confirmed against two real GTA payout screenshots) — is
+  // rendered per-player in the "Payout by Player" cards below as "Career
+  // Progress", not reintroduced as a crew-wide number here.
 
   const extrasLabel = document.createElement('p');
   extrasLabel.className = 'manifest-title';
@@ -333,17 +343,20 @@ function renderPayoutSection(primary, r){
     head.innerHTML = `<span class="dot"></span><span>${playerLabel(i)}</span>`;
     card.appendChild(head);
 
-    if (isHost){
-      const primaryRow = document.createElement('div');
-      primaryRow.className = 'ledger-row';
-      primaryRow.innerHTML = `<span class="k">Primary Target</span><span class="v">${money(primary.value)}</span>`;
-      card.appendChild(primaryRow);
-    }
-
+    // Bag value is pure logistics info now (what's physically in this
+    // player's bag) — it no longer feeds Payout at all. Secondary loot
+    // share is the number that actually does: the pooled secondary total
+    // split evenly across every player, regardless of bag contents (see
+    // runOptimizer()/computeGuidePayout() in js/kch-model.js for why).
     const bagRow = document.createElement('div');
     bagRow.className = 'ledger-row';
     bagRow.innerHTML = `<span class="k">Bag value</span><span class="v">${money(bag.value)}</span>`;
     card.appendChild(bagRow);
+
+    const shareRow = document.createElement('div');
+    shareRow.className = 'ledger-row';
+    shareRow.innerHTML = `<span class="k">Secondary loot share (split evenly)</span><span class="v">${money(r.secondaryShareEach)}</span>`;
+    card.appendChild(shareRow);
 
     if (r.buyerRequestBonusEach > 0){
       const bonusRow = document.createElement('div');
@@ -351,26 +364,59 @@ function renderPayoutSection(primary, r){
       bonusRow.innerHTML = `<span class="k">Buyer's Request bonus</span><span class="v">${money(r.buyerRequestBonusEach)}</span>`;
       card.appendChild(bonusRow);
     }
-    if (isHost && r.planningFee > 0){
-      const feeRow = document.createElement('div');
-      feeRow.className = 'ledger-row';
-      feeRow.innerHTML = `<span class="k">Repeat-run planning fee</span><span class="v neg">${money(-r.planningFee)}</span>`;
-      card.appendChild(feeRow);
+
+    if (isHost){
+      const primaryRow = document.createElement('div');
+      primaryRow.className = 'ledger-row';
+      primaryRow.innerHTML = `<span class="k">Primary Target</span><span class="v">${money(primary.value)}</span>`;
+      card.appendChild(primaryRow);
+      // The repeat-run planning fee is deliberately NOT shown on this
+      // card — it's paid up front to set up a repeat run, a sunk cost
+      // by the time this payout matters, unrelated to what the heist
+      // itself pays out. It stays disclosed in the Finale Result ledger
+      // above.
+    } else {
+      // Every non-host player unconditionally earns the Helper bonus —
+      // not a per-run toggle, a fixed rule of the model (2026-08-02).
+      const helperRow = document.createElement('div');
+      helperRow.className = 'ledger-row';
+      helperRow.innerHTML = `<span class="k">Helper bonus</span><span class="v">${money(r.helperBonusEach)}</span>`;
+      card.appendChild(helperRow);
     }
 
-    // Page 2's Take intentionally excludes the Elite Challenge bonus — see
-    // computeGuideTake() in js/kch-model.js for why.
-    const take = computeGuideTake({
-      bagValue: bag.value,
+    // "Payout" (renamed from "Take" 2026-08-02 — it's the amount that
+    // actually hits the wallet) intentionally excludes the Elite
+    // Challenge bonus — see computeGuidePayout() in js/kch-model.js for
+    // why.
+    const playerPayout = computeGuidePayout({
+      secondaryShareEach: r.secondaryShareEach,
       isHost,
       primaryValue: primary.value,
-      planningFee: r.planningFee,
-      buyerRequestBonusEach: r.buyerRequestBonusEach
+      buyerRequestBonusEach: r.buyerRequestBonusEach,
+      helperBonusEach: r.helperBonusEach
     });
-    const totalRow = document.createElement('div');
-    totalRow.className = 'ledger-row total';
-    totalRow.innerHTML = `<span class="k">Take</span><span class="v">${money(take)}</span>`;
-    card.appendChild(totalRow);
+    const payoutRow = document.createElement('div');
+    payoutRow.className = 'ledger-row total';
+    payoutRow.innerHTML = `<span class="k">Payout</span><span class="v">${money(playerPayout)}</span>`;
+    card.appendChild(payoutRow);
+
+    if (r.eliteBonusEach > 0){
+      const eliteNote = document.createElement('p');
+      eliteNote.className = 'hint';
+      eliteNote.style.margin = '4px 0 10px';
+      eliteNote.innerHTML = `+ <b>${money(r.eliteBonusEach)}</b> if Elite Challenge succeeds — not counted above, depends on live execution`;
+      card.appendChild(eliteNote);
+    }
+
+    const careerProgress = computeCareerProgress({
+      secondaryShareEach: r.secondaryShareEach,
+      isHost,
+      primaryValue: primary.value
+    });
+    const careerRow = document.createElement('div');
+    careerRow.className = 'ledger-row total career';
+    careerRow.innerHTML = `<span class="k">Career Progress</span><span class="v">${money(careerProgress)}</span>`;
+    card.appendChild(careerRow);
 
     payout.appendChild(card);
   }

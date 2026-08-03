@@ -80,7 +80,7 @@
         <div class="toggle-btn" data-val="no">No</div>
         <div class="toggle-btn" data-val="yes">Yes</div>
       </div>
-      <p class="hint">If yes, the ledger locks in your Buyer's Choice items first — the Buyer's Request and Elite Challenge bonuses are only in play if every marked item actually fits (and is reachable by your crew size). If no, Buyer's Choice picks are ignored for packing and the ledger optimizes purely for maximum bag value.</p>
+      <p class="hint">If yes, the ledger locks in your Buyer's Choice items first — the Buyer's Request and Elite Challenge bonuses are only in play if at least 2 items are marked (a single item can never satisfy the challenge) and every marked item actually fits (and is reachable by your crew size). If no, Buyer's Choice picks are ignored for packing and the ledger optimizes purely for maximum bag value.</p>
     </div>
   </div>
 
@@ -88,7 +88,7 @@
   <div class="step">
     <span class="step-num">5</span><span class="step-title">Crew Names (Optional)</span>
     <div class="step-body">
-      <p class="hint">Label each player's card on the Heist Guide page. Leave any of these blank to just show "Player 1", "Player 2", etc. Player 1 is always the host.</p>
+      <p class="hint">Label each player's card on the Heist Guide page. Leave any of these blank to just show "Player 1", "Player 2", etc. Player 1 is always the host. Every other player automatically earns the Helper bonus ($100,000 Normal / $200,000 Hard) on top of their secondary loot share — this isn't something you toggle here.</p>
       <div class="row2" id="playerNamesList"></div>
     </div>
   </div>
@@ -99,7 +99,7 @@
     <p class="hint" style="margin-top:12px; margin-bottom:0;">Your inputs are saved automatically — you can come back and edit anytime, even after submitting.</p>
   </div>
 
-  <p class="footnote">Kortz Center Heist released July 14, 2026. Primary Target payouts, the +10% Hard Mode modifier, the Buyer's Request bonus ($50,000 Normal / $100,000 Hard), the Elite Challenge bonus ($50,000 Normal / $100,000 Hard, per player) and the $100,000 repeat-run planning fee reflect publicly reported figures and may shift with balance updates. Secondary Target dollar values are randomized per run — enter what you actually scoped. Bag-space weights match the reported per-player carrying limit of 100 units per bag.</p>
+  <p class="footnote">Kortz Center Heist released July 14, 2026. Primary Target payouts, the +10% Hard Mode modifier, the Buyer's Request bonus ($50,000 Normal / $100,000 Hard), the Elite Challenge bonus ($50,000 Normal / $100,000 Hard, per player), the Helper bonus ($100,000 Normal / $200,000 Hard, every non-host player) and the $100,000 repeat-run planning fee reflect publicly reported figures and may shift with balance updates. Secondary Target dollar values are randomized per run — enter what you actually scoped. Bag-space weights match the reported per-player carrying limit of 100 units per bag.</p>
 
 </div>
 
@@ -316,6 +316,12 @@ function renderLootList(){
         descEl.textContent = `— ${cat.description}`;
         nameEl.appendChild(descEl);
       }
+      if (cat.scopeNote){
+        const scopeNoteEl = document.createElement('span');
+        scopeNoteEl.className = 'item-scope-note';
+        scopeNoteEl.textContent = cat.scopeNote;
+        nameEl.appendChild(scopeNoteEl);
+      }
       row.appendChild(nameEl);
 
       // hidden Buyer's Choice checkbox — must sit immediately before the
@@ -351,7 +357,13 @@ function renderLootList(){
         });
         wrap.appendChild(chk);
         const txt = document.createElement('span');
-        txt.textContent = `Taken ($${cat.fixedValue.toLocaleString('en-US')})`;
+        // Deliberately never shows the dollar figure here (2026-08-03) —
+        // fixedValue is a pessimistic planning assumption for the
+        // optimizer, not a confirmed number the player should see/anchor
+        // on during scope-out. "Scoped" (not "Taken") matches the rest of
+        // the page's vocabulary for "recorded during scope-out" — this is
+        // Page 1, before the heist runs, not a post-heist confirmation.
+        txt.textContent = 'Scoped';
         wrap.appendChild(txt);
         controls.appendChild(wrap);
       } else {
