@@ -164,6 +164,15 @@ function renderBagGauges(bags, genuineOverflow){
   }
 }
 
+// The optional per-run sub-type the player picked on page 1 (only the
+// Crisp Gallery gemstone offers one today — see `variants` in
+// secondary-loot.json). It lives on state.loot, not on the packed bag
+// items, since it's purely descriptive and never reaches the optimizer.
+function variantFor(itemId){
+  const entry = state.loot.find(l => l.itemId === itemId);
+  return entry && entry.variant ? entry.variant : '';
+}
+
 function playerLabel(i){
   const name = (state.playerNames && state.playerNames[i]) ? state.playerNames[i].trim() : '';
   const base = i === 0 ? 'Host (P1)' : `Player ${i + 1}`;
@@ -282,8 +291,17 @@ function renderItemsList(r){
           const div = document.createElement('div');
           div.className = 'manifest-item';
           div.dataset.floor = floorSlug(floor);
-          const descHtml = cat.description ? ` <span class="item-desc">— ${cat.description}</span>` : '';
-          div.innerHTML = `<span class="name">${cat.name}${descHtml}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(it.value)}</span>`;
+          // A picked variant (the Gemstone's type today) takes the
+          // description's slot rather than sitting alongside it: it IS the
+          // description, just the run-specific one the player selected, and
+          // the generic tag it replaces ("gem, color varies") is exactly
+          // what the pick resolves. Styled distinctly so it reads as a
+          // scoped detail, not catalog boilerplate.
+          const variant = variantFor(it.itemId);
+          const detailHtml = variant
+            ? ` <span class="item-variant">— ${variant}</span>`
+            : (cat.description ? ` <span class="item-desc">— ${cat.description}</span>` : '');
+          div.innerHTML = `<span class="name">${cat.name}${detailHtml}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(it.value)}</span>`;
           card.appendChild(div);
         });
       });

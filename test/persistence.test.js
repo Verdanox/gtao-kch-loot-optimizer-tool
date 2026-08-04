@@ -81,6 +81,49 @@ test('mergeLootByItemId merges saved values onto the current catalog by itemId, 
   }
 });
 
+// Per-run variant picks (the Gemstone's type today — see `variants` in
+// secondary-loot.json). Descriptive only: they persist and display, and
+// never reach the optimizer.
+const variantItem = catalog.find(c => Array.isArray(c.variants) && c.variants.length);
+
+test('every catalog item defaults to a blank variant, and at least one offers variants', () => {
+  const defaults1 = defaultPage1State(catalog);
+  assert.ok(variantItem, 'expected at least one catalog item with a variants list');
+  for (const l of defaults1.loot) assert.equal(l.variant, '');
+});
+
+test('a picked variant round-trips through serialize/deserialize/merge', () => {
+  const pick = variantItem.variants[1];
+  const page1 = {
+    ...defaultPage1State(catalog),
+    loot: defaultPage1State(catalog).loot.map(l =>
+      l.itemId === variantItem.itemId ? { ...l, value: 40000, variant: pick } : l)
+  };
+
+  const raw = JSON.stringify(serializeState(page1, defaultPage2State()));
+  const { page1: out } = deserializeState(raw, defaultPage1State(catalog), defaultPage2State());
+  const merged = mergeLootByItemId(catalog, out.loot);
+
+  const entry = merged.find(l => l.itemId === variantItem.itemId);
+  assert.equal(entry.variant, pick);
+  assert.equal(entry.value, 40000);
+  // Nothing else picked one up.
+  for (const l of merged.filter(l => l.itemId !== variantItem.itemId)) assert.equal(l.variant, '');
+});
+
+test('mergeLootByItemId drops a saved variant the catalog no longer offers', () => {
+  const savedLoot = [
+    { itemId: variantItem.itemId, value: 1000, buyersChoice: false, variant: 'Not A Real Gem' },
+    // an item with no variants list at all can never carry one back
+    { itemId: 'B-A', value: 2000, buyersChoice: false, variant: 'Emerald' }
+  ];
+  const merged = mergeLootByItemId(catalog, savedLoot);
+  assert.equal(merged.find(l => l.itemId === variantItem.itemId).variant, '');
+  assert.equal(merged.find(l => l.itemId === 'B-A').variant, '');
+  // The rest of the entry still merges normally.
+  assert.equal(merged.find(l => l.itemId === variantItem.itemId).value, 1000);
+});
+
 test('corrupted JSON falls back to defaults without throwing', () => {
   const defaults1 = defaultPage1State(catalog);
   const defaults2 = defaultPage2State();

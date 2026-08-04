@@ -480,7 +480,10 @@ export function defaultPage1State(catalog) {
     players: 1,
     elite: 'no',
     playerNames: ['', '', '', ''],
-    loot: catalog.map(cat => ({ itemId: cat.itemId, value: '', buyersChoice: false }))
+    // `variant` is the optional cosmetic sub-type pick (see `variants` in
+    // secondary-loot.json — only Gemstone has one today). Carried on every
+    // loot entry for a uniform shape; stays '' for items with no variants.
+    loot: catalog.map(cat => ({ itemId: cat.itemId, value: '', buyersChoice: false, variant: '' }))
   };
 }
 
@@ -498,7 +501,7 @@ export function serializeState(page1, page2) {
       players: page1.players,
       elite: page1.elite,
       playerNames: Array.isArray(page1.playerNames) ? page1.playerNames.slice(0, 4) : ['', '', '', ''],
-      loot: (page1.loot || []).map(l => ({ itemId: l.itemId, value: l.value, buyersChoice: !!l.buyersChoice }))
+      loot: (page1.loot || []).map(l => ({ itemId: l.itemId, value: l.value, buyersChoice: !!l.buyersChoice, variant: l.variant || '' }))
     },
     page2: {
       securityCombo: (page2 && page2.securityCombo) || '',
@@ -549,14 +552,22 @@ export function deserializeState(rawJsonString, fallbackPage1, fallbackPage2) {
 // catalog but missing from the saved blob (new items, or the item just
 // wasn't scoped) come back blank/unmarked; saved entries for items no
 // longer in the catalog are silently dropped.
+//
+// A saved `variant` only survives if the catalog entry still offers it in
+// its `variants` list — same spirit as dropping stale itemIds, so a
+// renamed/removed variant can't come back as a label nothing in the game
+// matches. Items with no `variants` always merge back as ''.
 export function mergeLootByItemId(catalog, savedLoot) {
   const savedById = new Map((savedLoot || []).map(l => [l.itemId, l]));
   return catalog.map(cat => {
     const saved = savedById.get(cat.itemId);
+    const variants = Array.isArray(cat.variants) ? cat.variants : [];
+    const savedVariant = saved && typeof saved.variant === 'string' ? saved.variant : '';
     return {
       itemId: cat.itemId,
       value: saved && saved.value !== undefined ? saved.value : '',
-      buyersChoice: saved ? !!saved.buyersChoice : false
+      buyersChoice: saved ? !!saved.buyersChoice : false,
+      variant: variants.includes(savedVariant) ? savedVariant : ''
     };
   });
 }

@@ -66,7 +66,7 @@
   <div class="step">
     <span class="step-num">3</span><span class="step-title">Scoped Secondary Loot</span>
     <div class="step-body">
-      <p class="hint">Every scoutable item is listed below, grouped by the floor you'll find it on. Fill in the value for whatever you actually photographed and leave the rest blank. Mark up to <b>three</b> (fewer is fine) as the Buyer's Choice — these only affect bag packing once the Elite Challenge (Step 4) is turned on. With Elite off, the ledger just optimizes for maximum bag value regardless of these picks. The Delivery Truck Crate's true value can't be known until you actually take it, so it's a checkbox — check it if you grabbed it, and it locks in at the community-estimated value.</p>
+      <p class="hint">Every scoutable item is listed below, grouped by the floor you'll find it on. Fill in the value for whatever you actually photographed and leave the rest blank. Mark up to <b>three</b> (fewer is fine) as the Buyer's Choice — these only affect bag packing once the Elite Challenge (Step 4) is turned on. With Elite off, the ledger just optimizes for maximum bag value regardless of these picks. The Delivery Truck Crate's true value can't be known until you actually take it, so it's a checkbox — check it if you grabbed it, and it locks in at the community-estimated value. The Crisp Gallery gemstone comes in a different type every run — pick the one you scoped from its dropdown and the Heist Guide will name it. That pick is labelling only; it doesn't change any of the math.</p>
       <div class="loot-list" id="lootList"></div>
     </div>
   </div>
@@ -337,9 +337,10 @@ function renderLootList(){
       bcCheck.addEventListener('change', e => { item.buyersChoice = e.target.checked; renderAll(); });
       row.appendChild(bcCheck);
 
-      // controls (value input, or for BAY, its own fixed-value checkbox —
-      // both are independent click targets carved out of the row's
-      // BC-label hit area, one uniform rule across all 33 rows)
+      // controls (value input, or for BAY, its own fixed-value checkbox,
+      // plus an optional variant dropdown — all independent click targets
+      // carved out of the row's BC-label hit area, one uniform rule across
+      // all 33 rows)
       const controls = document.createElement('div');
       controls.className = 'item-controls';
 
@@ -372,6 +373,31 @@ function renderLootList(){
         valInput.value = item.value; valInput.dataset.f = 'val';
         valInput.addEventListener('input', e => { item.value = e.target.value === '' ? '' : Number(e.target.value); renderAll(false); });
         controls.appendChild(valInput);
+      }
+
+      // Optional cosmetic sub-type picker, driven entirely by the catalog's
+      // `variants` array (only Gemstone has one today — the gem that spawns
+      // in the Crisp Gallery varies per run). Purely descriptive: it never
+      // touches value, weight, eligibility, or packing — it just rides
+      // along in saved state so guide.html can name the gem. Deliberately
+      // rendered AFTER the value input so the documented tab order above
+      // (click row, Tab once -> value input) is unchanged.
+      if (Array.isArray(cat.variants) && cat.variants.length){
+        const variantSel = document.createElement('select');
+        variantSel.className = 'variant-select';
+        variantSel.setAttribute('aria-label', `${cat.variantLabel || 'Type'}: ${cat.name}`);
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = cat.variantLabel || 'Type';
+        variantSel.appendChild(blank);
+        cat.variants.forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v; opt.textContent = v;
+          variantSel.appendChild(opt);
+        });
+        variantSel.value = item.variant || '';
+        variantSel.addEventListener('change', e => { item.variant = e.target.value; renderAll(false); });
+        controls.appendChild(variantSel);
       }
 
       row.appendChild(controls);

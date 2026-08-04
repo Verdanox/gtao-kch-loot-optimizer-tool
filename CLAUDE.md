@@ -70,6 +70,21 @@ Both pages are `type="module"` and `import` directly from `js/kch-model.js`
     all (the truck doesn't always spawn) — distinct from `requiresPreps`
     below, which is about needing a prep mission for an item that IS
     always there.
+  - **`variants` + `variantLabel` (currently only on `2-H`, Gemstone)** —
+    an optional per-run sub-type picker. When a catalog entry carries a
+    non-empty `variants` array, `index.html` renders a dropdown of those
+    values in the item's controls (after the value input, so the
+    documented "click row, Tab once → value input" order is unchanged),
+    and the pick is saved on the loot entry as `variant`. It is purely
+    descriptive: never an eligibility, weight, value, or packing input,
+    and `runOptimizer()` never reads it. `guide.html` shows it in the
+    "Who Grabs What" manifest **in place of** the item's `description` —
+    a chosen variant is the run-specific version of the same field
+    (`2-H`'s generic tag is literally "gem, color varies"). Data-driven,
+    not a hardcoded `itemId === '2-H'` check: any item can grow a
+    `variants` list and get the same control. `mergeLootByItemId()` drops
+    a saved `variant` that the catalog no longer offers, the same way it
+    drops stale `itemId`s.
   - **`requiresPreps` (e.g. `["glass-cutter"]`)** — reminder-only metadata
     on four items (`0-A`, `2-B`, `2-C`, `2-K`) that need a prep mission to
     actually be lootable in-game. This does **not** gate the optimizer —
