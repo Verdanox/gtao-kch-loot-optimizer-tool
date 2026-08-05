@@ -342,7 +342,20 @@ function renderPayoutSection(primary, r){
   // per-player in-game). The correct per-player figure — now known
   // (2026-08-02, confirmed against two real GTA payout screenshots) — is
   // rendered per-player in the "Payout by Player" cards below as "Career
-  // Progress", not reintroduced as a crew-wide number here.
+  // Progress".
+  //
+  // "Total Take" (added 2026-08-04) is a DIFFERENT thing, not a revival of
+  // that removed line: a purely comparative, crew-wide reference number —
+  // "how much did this heist generate in total, before any bonuses, fees,
+  // or splitting" — explicitly not framed as anyone's personal take or
+  // career progress. The `.hint` note right below it exists specifically
+  // to keep that distinction unmistakable.
+  addLedgerRow(ledger, 'Total Take', money(primary.value + r.secondaryBagValue), 'total');
+  const totalTakeNote = document.createElement('p');
+  totalTakeNote.className = 'hint';
+  totalTakeNote.style.margin = '4px 0 0';
+  totalTakeNote.textContent = "Crew-wide gross total, before bonuses/fees and before splitting between players — not any individual's payout.";
+  ledger.appendChild(totalTakeNote);
 
   const extrasLabel = document.createElement('p');
   extrasLabel.className = 'manifest-title';

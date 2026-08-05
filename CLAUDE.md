@@ -316,7 +316,20 @@ confirmation dialog on unlock.
   total. The old line was removed as actively misleading rather than left
   in place. The per-player replacement that note deferred is the Career
   Progress figure above — don't reintroduce a crew-wide combined-total
-  headline; the correct shape for this number is per-player.
+  *framed as career progress*; the correct shape for that figure is
+  per-player.
+- **A different, plainly-labeled "Total Take" line was added 2026-08-04 —
+  this is NOT a revival of the removed line above.** It shows the exact
+  same arithmetic (`primary.value + secondaryBagValue`), in the Finale
+  Result ledger right after the Primary Target/Secondary Targets lines it
+  sums, but with a deliberately different framing: a purely comparative,
+  crew-wide reference number ("how much did this heist generate in total,
+  before any bonuses, fees, or splitting"), explicitly not presented as
+  anyone's personal take or career progress. `guide.html` pairs it with an
+  inline note saying exactly that, so the distinction from the
+  still-removed career-progress framing stays unmistakable. The takeaway:
+  the *number* was never the problem, the *framing* was — don't drop the
+  disclaiming note if this line is ever touched again.
 - **Page 2's per-player "Payout" figure (renamed from "Take" 2026-08-02 —
   it's the amount that actually hits the wallet) shows the Buyer's
   Request bonus but never projects the Elite Challenge bonus dollar
