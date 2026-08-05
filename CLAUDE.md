@@ -179,14 +179,31 @@ confirmation dialog on unlock.
   is already locked in and forcing them could only cost bag value for a
   bonus that can't pay out.
 - **Bag assignment follows a four-tier, value-preserving preference**
-  (rewritten 2026-08-02, extended 2026-08-03): `packBins()`'s
-  reconstruction step chooses *which bin* an item lands in — never which
-  items get chosen or the total secondary value — by, in order: (1)
-  `Crisp Gallery` items prefer the host's bag specifically (the one
-  narrow, deliberate exception — the host is the more reliable player to
-  verify in-room presence when using an EMP, given known desync behavior
-  in that specific room; does not extend to `Second`); (2) otherwise,
-  prefer a bin that already contains an item on the same floor (general
+  (rewritten 2026-08-02, extended 2026-08-03, widened 2026-08-04):
+  `packBins()`'s reconstruction step chooses *which bin* an item lands in —
+  never which items get chosen or the total secondary value — by, in
+  order: (1) `Second` and `Crisp Gallery` items prefer the host's bag
+  specifically (`HOST_PRIORITY_FLOORS`, shared with
+  `assignItemsToBags()`'s own separate mechanism below). `Crisp Gallery`'s
+  piece of this is the original, narrower exception — the host is the more
+  reliable player to verify in-room presence when using an EMP, given
+  known desync behavior in that specific room. `Second` joined it
+  2026-08-04, confirmed against real heist mechanics: the host must
+  physically enter the Vault for the primary target at *every* crew size
+  (2-4 players), and Loading Bay is mutually exclusive with that Vault
+  visit by game mechanics (can be sequenced before or after, but not
+  combined into one pass) — so the host's route naturally continues on to
+  the building's 2nd floor (`Second` + `Crisp Gallery`) afterward. `Vault`
+  and `Loading Bay` were deliberately **not** added to this tier: the whole
+  crew is physically present for the Vault sequence, not just the host, so
+  there's no logistics/adjacency reason to bias Vault loot toward any one
+  player — it's already the lowest-value-per-weight floor in the KCH, so
+  it's naturally deprioritized by the value-maximizing search on its own,
+  no tier needed; Loading Bay is isolated with no clustering upside either
+  way, and can still land in the host's bag when capacity/ordering happens
+  to put it there — that's fine, since the host just sequences it before
+  or after the Vault trip rather than combining them; (2) otherwise, prefer
+  a bin that already contains an item on the same floor (general
   floor-clustering, so a crew spends less time running between floors);
   (3) otherwise, prefer a bin that already contains an item on an
   *adjacent* floor per the real Kortz Center map (`Alarm Floor`↔`First`,
@@ -204,13 +221,39 @@ confirmation dialog on unlock.
   for literally *every* item (mandatory and optional alike), which is
   why Buyer's Choice loot used to land entirely in the host's bag — a
   real bug, not a rule.
+  There's no fixed job-to-player-slot convention in real play (confirmed
+  with the user 2026-08-04), so no per-player-index (P2/P3/P4) rules were
+  added beyond the host/non-host split above — tiers 2-4 already produce
+  reasonable, jobs-agnostic clustering for every non-host player once the
+  host's items are placed first.
   `assignItemsToBags()` (the separate, unused-in-production
   First-Fit-Decreasing primitive — originally kept for a possible future
   "Greedy" model, since deprioritized, see `internal/model-notes.md`)
   still has its own, untouched `HOST_PRIORITY_FLOORS`/
   `HOST_PRIORITY_BOOST` logic bundling `Second`+`Crisp Gallery` — see
   `internal/model-notes.md`'s "Clarified model definitions" for the
-  original "EMP" rationale that logic still reflects.
+  original "EMP" rationale that logic still reflects. `packBins()` now
+  reads this same `HOST_PRIORITY_FLOORS` constant directly for tier 1
+  above, rather than a separate `Crisp Gallery`-only constant, since the
+  two happened to converge on the identical floor set.
+- **`packBins()`'s bag assignment for a given selected item set is
+  independent of Buyer's Choice/Elite status** (fixed 2026-08-04, real bug
+  report: the same scope-out, resubmitted with Elite toggled on vs off,
+  produced two different bag splits despite an identical secondary total
+  and item selection). Root cause: `packBins()` built its working list as
+  `[...mandatory, ...optional]`, so marking items Buyer's-Choice-mandatory
+  pulled them to the front of the list, changing the order the four-tier
+  reconstruction above walks items in — and when multiple bag partitions
+  tie for the optimal value (as they did in the bug report), which one
+  surfaces depended on this ordering accident, not on which was more
+  sensible. Fix: every item passed to `packBins()` may carry an optional
+  `order` field (mirrors the optional `floor` field — never touches
+  value/weight/eligibility); the reconstruction stable-sorts by it before
+  walking items, so callers that never set it (every pre-existing caller
+  except `runOptimizer()`) see zero behavior change. `runOptimizer()`
+  populates `order` from each item's position in the catalog-ordered
+  `eligible` list, so reconstruction now always walks items in true
+  catalog order regardless of which end up `mandatory` vs `optional`.
 - **Buyer's Choice is conditional on Elite Challenge, and needs at least
   2 picks.** Marking up to three items as Buyer's Choice only affects
   packing when Elite Challenge is toggled on. With Elite off, Buyer's

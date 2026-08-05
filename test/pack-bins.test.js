@@ -94,16 +94,20 @@ test('the real 3-player catalog combo that originally overflowed a bag now packs
 });
 
 // Regression coverage for the 2026-08-02 reconstruction rewrite: bin
-// CHOICE now follows a three-tier preference (Crisp-Gallery-to-host, then
-// general floor-clustering, then least-loaded-bin) instead of always
-// trying bin 0 first — the old behavior was why Buyer's Choice loot
-// always ended up entirely in the host's bag.
+// CHOICE now follows a four-tier preference (host-priority-floor, then
+// general floor-clustering, then adjacent-floor, then least-loaded-bin)
+// instead of always trying bin 0 first — the old behavior was why Buyer's
+// Choice loot always ended up entirely in the host's bag.
 
 test('floor-clustering: same-floor items land together, and spread to a fresh bin only when there is no floor match', () => {
+  // C's floor is deliberately NOT one of the host-priority floors
+  // (Second/Crisp Gallery) so this test isolates tier 2 (floor-clustering)
+  // from tier 1 (host-priority) — otherwise C would land with the host
+  // regardless of A/B's floor, which is a different tier's job to prove.
   const mandatory = [{ id: 'A', value: 100, weightUnits: 20, floor: 'Vault' }];
   const optional = [
     { id: 'B', value: 50, weightUnits: 20, floor: 'Vault' },
-    { id: 'C', value: 50, weightUnits: 20, floor: 'Second' },
+    { id: 'C', value: 50, weightUnits: 20, floor: 'First' },
   ];
   const result = packBins(mandatory, optional, 3, 100);
   assert.ok(result);
@@ -174,6 +178,43 @@ test('Crisp Gallery preference falls through gracefully when the host bin truly 
   assert.ok(result.bags[1].items.some(i => i.id === 'G'), 'Crisp Gallery item should fall through to a non-host bin, not be dropped');
 });
 
+// Regression coverage for the 2026-08-04 widening: the host must physically
+// enter the Vault for the primary target at every crew size, and Loading
+// Bay is mutually exclusive with that visit — so the host's route
+// naturally continues on to the building's 2nd floor afterward. Second
+// joins Crisp Gallery as a host-priority floor; Vault and Loading Bay
+// deliberately do not (see packBins()'s tier-1 comment for why).
+test('Second-floor items now also prefer the host bin, same as Crisp Gallery', () => {
+  const mandatory = [{ id: 'A', value: 500, weightUnits: 80, floor: 'Vault' }];
+  const optional = [{ id: 'S', value: 50, weightUnits: 10, floor: 'Second' }];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  assert.equal(result.value, 550, 'the Second-floor preference must not cost any value');
+  assert.ok(result.bags[0].items.some(i => i.id === 'S'), 'Second-floor item should land with the host despite bin 0 having far less room than bin 1');
+});
+
+test('Vault and Loading Bay items get no host-priority treatment', () => {
+  // A fills bin 0 partway; V (Vault) and L (Loading Bay) each have enough
+  // room to fit in either bin, but neither is host-priority, so they fall
+  // through to tier 4 (least-loaded) and spread rather than piling into
+  // bin 0 with A.
+  const mandatory = [{ id: 'A', value: 500, weightUnits: 60, floor: 'Vault' }];
+  const optional = [
+    { id: 'V', value: 50, weightUnits: 30, floor: 'Vault' },
+    { id: 'L', value: 50, weightUnits: 30, floor: 'Loading Bay' },
+  ];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  // V shares A's floor, so tier 2 (floor-clustering) legitimately puts it
+  // with A — that's expected and not what this test is about.
+  assert.equal(bagOf('V'), bagOf('A'), 'V shares a floor with A and should cluster via tier 2, not tier 1');
+  // L is on an isolated floor with no relation to A/V's floor — it should
+  // NOT be pulled toward the host bin the way a Second/Crisp Gallery item
+  // would be; least-loaded (tier 4) should send it to the emptier bin 1.
+  assert.notEqual(bagOf('L'), bagOf('A'), 'Loading Bay should never get a host-priority nudge');
+});
+
 // Regression coverage for the 2026-08-03 adjacent-floor tie-break: a
 // softer nudge, ranked below exact-floor-match and above least-loaded,
 // for clustering items whose floors are one real-map transition apart
@@ -222,6 +263,44 @@ test('adjacent-floor preference falls through gracefully when the only adjacent 
   assert.ok(result);
   assert.equal(result.value, 1050, 'the adjacency preference should still pack B, just not with the full bin');
   assert.ok(result.bags[1].items.some(i => i.id === 'B'), 'adjacent-floor item should fall through to a non-adjacent bin, not be dropped');
+});
+
+// Regression test for the real 2026-08-04 bug report: the same scope-out,
+// resubmitted with Elite Challenge toggled on vs off, produced two
+// DIFFERENT bag splits despite an identical $740,000 secondary total and
+// an identical 10-item selection. Root cause: packBins() concatenated
+// `[...mandatory, ...optional]`, so marking items Buyer's-Choice-mandatory
+// pulled them to the front of the processing order, changing which of
+// several equally-optimal-value partitions the reconstruction landed on.
+// The `order` field (threaded through from runOptimizer's catalog-ordered
+// `eligible` list) fixes this by making packBins always walk items in true
+// catalog order regardless of Buyer's Choice/Elite status.
+test('bag assignment for a given selected item set no longer depends on Elite Challenge status', () => {
+  const values = {
+    'BAY': 110000, '1-B': 33000, '1-C': 33000, '1-D': 33000,
+    '2-C': 97500, '2-G': 82000, '2-H': 117500, '2-I': 78000,
+    '2-J': 46000, '2-K': 110000
+  };
+  const bcIds = new Set(['1-B', '2-I', '2-K']);
+  const baseLoot = catalog.map(cat => ({
+    itemId: cat.itemId,
+    value: Object.prototype.hasOwnProperty.call(values, cat.itemId) ? values[cat.itemId] : '',
+    buyersChoice: bcIds.has(cat.itemId)
+  }));
+
+  const stateFor = (elite) => ({
+    primaryId: 'la-derniere-debauche', difficulty: 'normal', weekly: 'first',
+    players: 2, elite, loot: baseLoot
+  });
+
+  const eliteOn = runOptimizer(stateFor('yes'), catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  const eliteOff = runOptimizer(stateFor('no'), catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+
+  assert.equal(eliteOn.secondaryBagValue, 740000);
+  assert.equal(eliteOn.secondaryBagValue, eliteOff.secondaryBagValue, 'total value must match regardless of Elite status (already true before this fix)');
+
+  const bagShapeOf = (result) => result.bags.map(b => b.items.map(i => i.itemId).sort().join(','));
+  assert.deepEqual(bagShapeOf(eliteOn), bagShapeOf(eliteOff), 'per-bag item assignment must now be identical whether Elite is on or off');
 });
 
 // Fuzz test via the real runOptimizer entry point: across many random

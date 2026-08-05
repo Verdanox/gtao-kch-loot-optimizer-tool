@@ -102,6 +102,15 @@ export function knapsack(items, capacityUnits) {
 // item's real weight advantage) lets them win that race more often,
 // without ever overriding capacity — if the host's bag is genuinely full
 // when an item's turn comes up, it still falls through exactly as before.
+//
+// Shared with `packBins()` below (2026-08-04): confirmed via the host's
+// real in-heist routing (mandatory Vault trip for the primary target
+// naturally continues on to the building's 2nd floor — Second and Crisp
+// Gallery) that the *same* two floors are the right host-priority set for
+// packBins()'s own, unrelated tier-1 bin-choice mechanism. Vault and
+// Loading Bay were deliberately considered and excluded — see packBins()'s
+// tier-1 comment for why. assignItemsToBags()'s own sort-weight-boost
+// mechanism below is otherwise untouched.
 const HOST_PRIORITY_FLOORS = new Set(['Second', 'Crisp Gallery']);
 const HOST_PRIORITY_BOOST = 8;
 
@@ -158,12 +167,22 @@ function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 // optimal total value — none of this can ever cost secondary value,
 // which matters because every player's career progress is driven by
 // that same total (see computeCareerProgress below), split evenly:
-//   1. Crisp Gallery items prefer bin 0 (the host) — the one deliberate,
-//      narrowly-scoped exception, confirmed with the user 2026-08-02:
-//      the host is the more reliable player to verify in-room presence
-//      when using an EMP, given known desync behavior in that specific
-//      room. Does NOT extend to Second — that floor gets no special
-//      treatment now, just tier 2 like every other floor.
+//   1. Second and Crisp Gallery items prefer bin 0 (the host) —
+//      HOST_PRIORITY_FLOORS, shared with assignItemsToBags() above.
+//      Crisp Gallery's own rationale (confirmed with the user
+//      2026-08-02): the host is the more reliable player to verify
+//      in-room presence when using an EMP, given known desync behavior
+//      in that specific room. Second joined it 2026-08-04, confirmed via
+//      real heist mechanics: the host must physically enter the Vault
+//      for the primary target at every crew size, and Loading Bay is
+//      mutually exclusive with that Vault visit — so the host's route
+//      naturally continues on to the building's 2nd floor (Second +
+//      Crisp Gallery) afterward. Vault and Loading Bay were deliberately
+//      NOT added: the whole crew is physically present for the Vault
+//      sequence (not just the host), so there's no logistics reason to
+//      bias Vault loot toward any one player — it's low-value filler
+//      already handled correctly by the value-maximizing search above.
+//      Loading Bay is isolated with no adjacency upside either way.
 //   2. Otherwise, prefer a bin that already contains an item sharing the
 //      same `.floor` — general floor-clustering, so a crew spends less
 //      time running between floors to collect their assigned loot.
@@ -194,12 +213,11 @@ function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 // objects ({ id, value, weightUnits, floor }).
 //
 // Note: `assignItemsToBags()` above has its own, separate
-// HOST_PRIORITY_FLOORS/HOST_PRIORITY_BOOST logic (still bundling Second
-// + Crisp Gallery) — that function is untouched by this change, kept
-// only as a tested primitive for a possible future "Greedy" model. The
-// CRISP_GALLERY constant below is intentionally its own thing, even
-// though it overlaps that set on one floor name.
-const CRISP_GALLERY = 'Crisp Gallery';
+// HOST_PRIORITY_FLOORS/HOST_PRIORITY_BOOST logic — that function is
+// untouched by this change, kept only as a tested primitive for a
+// possible future "Greedy" model. `packBins()`'s tier 1 below now reads
+// the very same HOST_PRIORITY_FLOORS constant directly (2026-08-04) —
+// no separate CRISP_GALLERY constant needed anymore.
 
 // Real Kortz Center map adjacency (confirmed with the user 2026-08-03):
 // which floors are a single transition apart. Used only as tier 3 above —
@@ -228,6 +246,21 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
     ...mandatory.map(it => ({ ...it, w: it.weightUnits / unit, mandatory: true })),
     ...optional.map(it => ({ ...it, w: it.weightUnits / unit, mandatory: false }))
   ];
+  // Stable-sort by the caller's optional `order` field (mirrors the
+  // optional `floor` field — never touches value/weight/eligibility) so
+  // the reconstruction below always walks items in one canonical sequence,
+  // regardless of how many of them were passed in as `mandatory` vs
+  // `optional`. Without this, concatenating mandatory-first changes the
+  // processing order the four-tier bag-choice below sees, which can select
+  // a *different* (but equally optimal-value) partition purely because
+  // Buyer's Choice/Elite status happened to reorder the list — confirmed
+  // 2026-08-04 against a real bug report (same scope-out, same $740,000
+  // total, two different bag splits depending on Elite on/off).
+  // `runOptimizer()` populates `order` from true catalog position; callers
+  // that never set it (every pre-existing test) get `0 - 0 = 0` throughout,
+  // making this a no-op — current mandatory-first behavior is preserved
+  // exactly when no caller opts in.
+  items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   const NEG = -Infinity;
   const memo = new Map();
@@ -261,7 +294,7 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
 
   // Reconstruct one concrete assignment matching that optimal value,
   // choosing among value-preserving bins via the four-tier preference
-  // documented above (Crisp-Gallery-to-host, then floor-clustering, then
+  // documented above (host-priority-floor, then floor-clustering, then
   // adjacent-floor-clustering, then least-loaded, then ascending index).
   const bagsOut = Array.from({ length: bins }, () => ({ items: [], value: 0, weightUsed: 0 }));
   let caps = initCaps.slice();
@@ -278,8 +311,22 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
       if (it.value + solve(i + 1, next) === target) candidates.push({ b, next });
     }
 
+    // Tier 1 (2026-08-04, widened from Crisp-Gallery-only): the host must
+    // physically enter the Vault for the primary target at every crew size,
+    // and Loading Bay is mutually exclusive with that Vault visit by game
+    // mechanics — so the host's route naturally continues on to the
+    // building's 2nd floor (Second + Crisp Gallery) instead. Crisp Gallery
+    // additionally keeps its original EMP-desync rationale (the host is the
+    // more reliable player to verify in-room presence there) — that fact
+    // doesn't extend to Second, but the routing argument above does.
+    // Vault and Loading Bay were deliberately NOT added here: the whole
+    // crew is physically present for the Vault sequence (not just the
+    // host), so there's no logistics/adjacency reason to bias Vault loot
+    // toward any one player — it's low-value filler already handled
+    // correctly by the value-maximizing search above, no tier needed.
+    // Loading Bay is isolated with no adjacency upside either way.
     let chosen;
-    if (it.floor === CRISP_GALLERY) {
+    if (HOST_PRIORITY_FLOORS.has(it.floor)) {
       chosen = candidates.find(c => c.b === 0);
     }
     if (!chosen && it.floor !== undefined) {
@@ -327,9 +374,19 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
 export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstants) {
   const valid = state.loot.filter(l => l.value !== '' && l.value !== null && l.value !== undefined && !isNaN(l.value));
   const eligible = valid.filter(l => itemById(catalog, l.itemId).minPlayers <= state.players);
+  // `order` = each item's position in `eligible` (already catalog-ordered)
+  // — passed through to packBins() so its reconstruction always walks
+  // items in true catalog order, regardless of which of them end up in
+  // `mandatory` vs `optional` below. Without this, splitting eligible
+  // items by Buyer's Choice status and concatenating mandatory-first would
+  // change packBins()'s processing order purely based on Elite Challenge
+  // status, which could select a different (though equally optimal-value)
+  // bag partition for the same chosen items — see packBins()'s own comment
+  // on the `order` field for the full writeup.
+  const orderById = new Map(eligible.map((l, idx) => [l.itemId, idx]));
   const toItem = (l) => {
     const cat = itemById(catalog, l.itemId);
-    return { id: l.itemId, value: Number(l.value), weightUnits: cat.weight, floor: cat.floor };
+    return { id: l.itemId, value: Number(l.value), weightUnits: cat.weight, floor: cat.floor, order: orderById.get(l.itemId) };
   };
 
   const bcValid = valid.filter(l => l.buyersChoice);
