@@ -40,10 +40,6 @@
     </div>
     <div class="warn-box" id="warnBox" style="display:none;"></div>
     <div class="ledger" id="bagLedger"></div>
-    <div class="bag-manifest" style="padding-top:0;">
-      <p class="manifest-title" style="margin-top:0;">Bag Capacity</p>
-      <div class="bag-gauges" id="bagGauges"></div>
-    </div>
   </div>
 
   <div class="step">
@@ -154,26 +150,6 @@ function isGenuineOverflow(r){
   return r.overflow && r.bcIneligibleIds.length === 0;
 }
 
-// ---------- RENDER: shared bits ----------
-function renderBagGauges(bags, genuineOverflow){
-  const el = document.getElementById('bagGauges');
-  el.innerHTML = '';
-  for (let i = 0; i < state.players; i++){
-    const pct = Math.min(100, (bags[i].weightUsed / BAG_CAPACITY_PER_PLAYER) * 100);
-    const bag = document.createElement('div');
-    bag.className = 'bag';
-    const fill = document.createElement('div');
-    fill.className = 'fill' + (genuineOverflow ? ' over' : '');
-    fill.style.width = pct.toFixed(0) + '%';
-    const tag = document.createElement('div');
-    tag.className = 'tag';
-    tag.textContent = 'P' + (i + 1);
-    bag.appendChild(fill);
-    bag.appendChild(tag);
-    el.appendChild(bag);
-  }
-}
-
 // The optional per-run sub-type the player picked on page 1 (only the
 // Crisp Gallery gemstone offers one today — see `variants` in
 // secondary-loot.json). It lives on state.loot, not on the packed bag
@@ -214,7 +190,16 @@ function renderPrepWarning(r){
 
 // ---------- RENDER: promoted "Optimized Bags" section ----------
 function renderBagSection(r){
-  renderBagGauges(r.bags, isGenuineOverflow(r));
+  // Bag-fill gauges (per-player weight-used bars) were removed 2026-08-04:
+  // they traced back to the pooled-knapsack overflow bug that motivated
+  // packBins()'s exact-bin-packing rewrite, but that bug is now
+  // structurally impossible (packBins() can't select a combination that
+  // doesn't fit). The one real signal they carried — a genuine overflow —
+  // is already communicated in text by the status stamp and warn-box
+  // below, so the gauges were pure redundant visual space with no
+  // actionable info during a run (bag fill has zero economic effect, see
+  // "Every player's secondary-loot cut is identical" in CLAUDE.md).
+  // Removed to keep the guide more compact above the scroll fold.
 
   // Same three-way distinction the warn-box below already makes: overflow
   // has two different causes, and only one of them is actually a weight

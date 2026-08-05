@@ -193,28 +193,6 @@ select:focus, input:focus{border-color:var(--gold);}
 .crew-opt.active{border-color:var(--teal); background:rgba(73,200,184,0.1);}
 .crew-opt.active .n{color:var(--teal);}
 
-.bag-gauges{display:flex; gap:6px; margin-top:14px;}
-.bag{
-  flex:1;
-  height:34px;
-  border:1px solid var(--line);
-  background:var(--panel-2);
-  position:relative;
-  overflow:hidden;
-}
-.bag .fill{
-  position:absolute; left:0; top:0; bottom:0;
-  background:var(--teal);
-  width:0%;
-  transition:width .2s ease, background .2s ease;
-}
-.bag .fill.over{background:var(--warn);}
-.bag .tag{
-  position:relative; z-index:1;
-  font-family:var(--mono); font-size:10px; color:var(--muted);
-  display:flex; align-items:center; justify-content:center; height:100%;
-}
-
 .loot-list{display:flex; flex-direction:column; gap:12px;}
 .loot-floor-heading{
   font-family:var(--mono); font-size:11px; color:var(--muted);
@@ -453,7 +431,6 @@ dialog.feedback-dialog{
 .ledger-row.total .k{color:var(--gold); font-size:14px; letter-spacing:.05em; text-transform:uppercase; font-family:var(--display);}
 .ledger-row.total .v{color:var(--gold); font-size:22px; font-weight:600; font-family:var(--display);}
 
-.bag-manifest{padding:0 22px 20px;}
 .manifest-title{font-family:var(--mono); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin:4px 0 10px;}
 .manifest-item{
   display:flex; justify-content:space-between; font-size:13px; padding:6px 0 6px 8px;
