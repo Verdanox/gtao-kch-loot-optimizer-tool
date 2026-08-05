@@ -64,6 +64,16 @@
     <div class="step-body" id="payoutList"></div>
   </div>
 
+  <!-- CREW SIZE COMPARISON (supplementary — "what if" info, doesn't affect
+       the actual run's result above) -->
+  <div class="step">
+    <span class="step-num">§</span><span class="step-title">Crew Size Comparison</span>
+    <div class="step-body">
+      <p class="hint">Per-player secondary loot share at every crew size, using the values you've already entered. Ignores Elite Challenge and Buyer's Choice entirely — Elite completion is never guaranteed, so it shouldn't skew which crew size looks best. Smaller crews also lose access to Crisp Gallery items (2+ players required), so a lower number there can mean fewer eligible items, not just a bigger total split more ways.</p>
+      <div class="ledger" id="crewSizeLedger"></div>
+    </div>
+  </div>
+
   <div class="no-print" style="text-align:center; margin-top:20px;">
     <a href="index.html" class="back-link">← Back to Edit</a>
   </div>
@@ -82,7 +92,7 @@
 
 <script type="module">
 import {
-  itemById, money, calcPrimary, runOptimizer, computeGuidePayout, computeCareerProgress, packedPrepWarnings,
+  itemById, money, calcPrimary, runOptimizer, compareCrewSizes, computeGuidePayout, computeCareerProgress, packedPrepWarnings,
   defaultPage1State, defaultPage2State, serializeState, deserializeState, mergeLootByItemId,
   DEFAULT_BONUS_CONSTANTS, STORAGE_KEY
 } from './js/kch-model.js';
@@ -440,6 +450,29 @@ function renderPayoutSection(primary, r){
   }
 }
 
+// Supplementary "what if" panel — never affects the actual result above,
+// just answers "would a different crew size pay more per player?" using
+// the same entered loot values. See compareCrewSizes() in kch-model.js for
+// why Elite/Buyer's Choice are ignored here.
+function renderCrewSizeComparison(){
+  const ledger = document.getElementById('crewSizeLedger');
+  ledger.innerHTML = '';
+
+  const results = compareCrewSizes(state, LOOT_CATALOG, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  const bestShare = Math.max(...results.map(r => r.secondaryShareEach));
+
+  results.forEach(r => {
+    const isCurrent = r.players === state.players;
+    const isBest = bestShare > 0 && r.secondaryShareEach === bestShare;
+    const label = `${r.players} Player${r.players > 1 ? 's' : ''}`;
+    const badges = [
+      isCurrent ? '<span class="flag">CURRENT</span>' : '',
+      isBest ? '<span class="flag">BEST PER PLAYER</span>' : ''
+    ].join('');
+    addLedgerRow(ledger, `${label}${badges}`, money(r.secondaryShareEach), isCurrent ? 'total' : '');
+  });
+}
+
 function renderGuide(){
   const primary = calcPrimary(state, PRIMARY_TARGETS, PRIMARY_MULTIPLIERS);
   const r = runOptimizer(state, LOOT_CATALOG, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
@@ -448,6 +481,7 @@ function renderGuide(){
   renderBagSection(r);
   renderItemsList(r);
   renderPayoutSection(primary, r);
+  renderCrewSizeComparison();
 }
 
 function wireSecurityCombo(){

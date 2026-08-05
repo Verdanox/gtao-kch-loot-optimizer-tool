@@ -475,6 +475,32 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
   };
 }
 
+// For a given scope-out (the loot values/floors already entered — nothing
+// else about the run changes), computes per-player secondary loot share at
+// every supported crew size (1-4), to answer "would a different crew size
+// pay more per player?" (2026-08-04, user request — precedented by
+// `internal/kch_calculator_8.2.26.py`'s own solo/duo/trio/quad payout
+// comparison). Deliberately ignores Elite Challenge/Buyer's Choice
+// entirely — every call forces `elite: 'no'`, regardless of what the
+// actual run has it set to, since Elite completion is never guaranteed and
+// shouldn't skew a "which crew size is best" comparison. This also means
+// Buyer's Choice tags never constrain packing here; every crew size gets
+// the same pure value-max pack `runOptimizer()` already does when Elite is
+// off. Crew size still changes which items are even ELIGIBLE (Crisp
+// Gallery items require `minPlayers: 2`) — `runOptimizer`'s own `eligible`
+// filter already handles that per player count, so a smaller crew's lower
+// share here can genuinely mean "fewer items were reachable," not just "a
+// bigger total got split more ways." Reuses `runOptimizer()` as-is; no new
+// packing logic.
+export function compareCrewSizes(state, catalog, bagCapacityPerPlayer, bonusConstants) {
+  const results = [];
+  for (let players = 1; players <= 4; players++) {
+    const r = runOptimizer({ ...state, players, elite: 'no' }, catalog, bagCapacityPerPlayer, bonusConstants);
+    results.push({ players, secondaryBagValue: r.secondaryBagValue, secondaryShareEach: r.secondaryShareEach });
+  }
+  return results;
+}
+
 // Page 2's per-player "Payout" figure (renamed from "Take" 2026-08-02 —
 // it's the amount that actually hits the wallet) = secondaryShareEach +
 // Buyer's Request bonus, PLUS the Helper bonus for every non-host player,

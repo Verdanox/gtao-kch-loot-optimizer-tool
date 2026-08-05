@@ -254,6 +254,23 @@ confirmation dialog on unlock.
   populates `order` from each item's position in the catalog-ordered
   `eligible` list, so reconstruction now always walks items in true
   catalog order regardless of which end up `mandatory` vs `optional`.
+- **`compareCrewSizes()` (added 2026-08-04) answers "would a different
+  crew size pay more per player?"** for the loot values already entered —
+  a supplementary panel on `guide.html`, never affecting the actual run's
+  result above it. It sweeps player counts 1-4, calling `runOptimizer()`
+  once per size with `elite` forced to `'no'` regardless of the real run's
+  setting — Elite Challenge completion is never guaranteed, so it
+  shouldn't skew which crew size looks best, and forcing Elite off also
+  means Buyer's Choice never constrains packing here, just the plain
+  value-max pack. It reports `secondaryShareEach` only (not the host's
+  full payout with primary/bonuses) — precedented by
+  `internal/kch_calculator_8.2.26.py`'s own solo/duo/trio/quad payout
+  comparison, which computes the analogous "best secondary take"
+  config. Crew size still changes item *eligibility*, not just how a
+  fixed total splits — Crisp Gallery items require `minPlayers: 2`, so a
+  smaller crew's lower share can genuinely mean fewer reachable items, not
+  just a bigger total split more ways; `guide.html`'s panel says this
+  explicitly rather than leaving it to be inferred from the numbers alone.
 - **Buyer's Choice is conditional on Elite Challenge, and needs at least
   2 picks.** Marking up to three items as Buyer's Choice only affects
   packing when Elite Challenge is toggled on. With Elite off, Buyer's

@@ -443,6 +443,7 @@ dialog.feedback-dialog{
   font-family:var(--mono); font-size:13px;
 }
 .ledger-row .k{color:var(--muted);}
+.ledger-row .k .flag{color:var(--gold); font-family:var(--mono); font-size:10px; margin-left:6px;}
 .ledger-row .v{color:var(--text); font-weight:500;}
 .ledger-row .v.neg{color:var(--warn);}
 .ledger-row.total{
