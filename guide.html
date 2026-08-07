@@ -47,6 +47,14 @@
     <div class="step-body" id="itemsList"></div>
   </div>
 
+  <!-- MAP VIEW gateway — the operational half of this page (prep warning,
+       security combo, who-grabs-what, floor maps) lives on its own page
+       now, so the host has something screenshot/pin-friendly during the
+       actual run that isn't buried under the planning content below. -->
+  <div class="no-print" style="margin:16px 0;">
+    <button type="button" id="mapViewBtn" class="map-view-btn">Map View →</button>
+  </div>
+
   <!-- FINALE RESULT / PAYOUT (demoted) -->
   <div class="results" id="totalsResults">
     <div class="results-head">
@@ -539,6 +547,7 @@ async function init(){
 
     wireSecurityCombo();
     initFeedbackControls();
+    document.getElementById('mapViewBtn').addEventListener('click', () => { location.href = 'map-view.html'; });
     renderGuide();
   } catch (err) {
     document.getElementById('bagLedger').innerHTML =

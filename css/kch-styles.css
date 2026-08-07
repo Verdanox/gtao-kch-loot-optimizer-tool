@@ -236,10 +236,6 @@ select:focus, input:focus{border-color:var(--gold);}
   -moz-appearance:textfield;
 }
 .item-controls .variant-select{
-  /* Visually first (reads as "what is it, then what's it worth"), while
-     staying second in DOM order so Tab from the row still lands on the
-     value input — the one uniform keyboard convention across all 33 rows. */
-  order:-1;
   flex:0 0 auto; width:auto; max-width:130px;
   font-family:var(--mono);
   font-size:11.5px;
@@ -479,6 +475,76 @@ dialog.feedback-dialog{
 .player-card.p-color-1 .dot{background:var(--p2-color);}
 .player-card.p-color-2 .dot{background:var(--p3-color);}
 .player-card.p-color-3 .dot{background:var(--p4-color);}
+
+/* Floor Maps (guide.html) — pins colored by owning player, same
+   p-color-N convention as .player-card above, not the floor palette
+   (a pin's color identifies who grabs the item, not which floor it's on —
+   the floor is already named in the card heading). */
+.floor-map-card{margin-bottom:14px;}
+.floor-map-card:last-child{margin-bottom:0;}
+/* Bigger than the base .loot-floor-heading (11px, shared with "Who Grabs
+   What"'s per-player floor sub-headings) — scoped to just this section
+   since the maps themselves render large, making the small shared size
+   look undersized by comparison here specifically. */
+.floor-map-card .loot-floor-heading{font-size:14px; margin-bottom:8px;}
+.floor-map{position:relative; width:100%; border:1px solid var(--line); overflow:hidden; background:var(--panel-2);}
+.floor-map img{display:block; width:100%; height:auto;}
+.map-pin{
+  position:absolute; transform:translate(-50%,-50%);
+  width:22px; height:22px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-size:9px; font-weight:600;
+  color:var(--bg); border:2px solid var(--bg);
+  box-shadow:0 0 0 1px rgba(0,0,0,0.4);
+}
+.map-pin.p-color-0{background:var(--p1-color);}
+.map-pin.p-color-1{background:var(--p2-color);}
+.map-pin.p-color-2{background:var(--p3-color);}
+.map-pin.p-color-3{background:var(--p4-color);}
+
+/* Per-map player-color legend (2026-08-06) — dynamically generated, sized
+   to the actual crew for this run, never baked into the base map art (the
+   same "pins are data" principle the pins themselves already follow: a
+   static legend can't adapt to crew size and would show unusable swatches
+   for players not even in this run). Repeated on every card rather than
+   once for the page, deliberately: a host screenshots individual floor
+   cards to share with teammates, and each screenshot needs to read
+   correctly on its own. Standalone classes, not reusing
+   .player-card-head .dot, so this stays additive and doesn't touch any
+   existing player-card styling. */
+.map-legend{
+  display:flex; flex-wrap:wrap; gap:6px 14px;
+  margin:0 0 10px;
+  font-family:var(--mono); font-size:13px; color:var(--muted);
+}
+.map-legend-item{display:flex; align-items:center; gap:6px; min-width:0;}
+.map-legend-item:not(:first-child)::before{content:"|"; color:var(--line);}
+/* Custom player names (index.html's optional per-player name field) have
+   no length limit — truncate with an ellipsis rather than let one long
+   name overflow the card or force a horizontal scrollbar. min-width:0 on
+   the flex item above is required for the ellipsis to actually engage
+   (flex items default to min-width:auto, which would prevent shrinking
+   below the untruncated text's natural width). Full name still available
+   via the label's title attribute (native tooltip) if truncated. */
+.map-legend-label{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:150px;}
+.mini-dot{width:10px; height:10px; border-radius:50%; display:inline-block; flex:0 0 auto;}
+.mini-dot.p-color-0{background:var(--p1-color);}
+.mini-dot.p-color-1{background:var(--p2-color);}
+.mini-dot.p-color-2{background:var(--p3-color);}
+.mini-dot.p-color-3{background:var(--p4-color);}
+
+/* Loading Bay's text-only callout (no map exists for this floor) gets the
+   same two color signals real map cards carry: a floor-color border
+   accent (matching every other floor-colored element in the app — a
+   border, not full-color text) and a player-color dot showing who's
+   actually carrying BAY this run, in place of a pin. */
+.floor-map-card.loading-bay-card{
+  border-left:3px solid var(--floor-loading-bay);
+  padding-left:10px;
+}
+.floor-map-card.loading-bay-card .hint{display:flex; align-items:flex-start; gap:6px; margin:0; font-size:13px;}
+.floor-map-card.loading-bay-card .mini-dot{margin-top:4px;}
+
 .player-card .loot-floor-heading{margin-top:8px;}
 .player-card .loot-floor-heading:first-of-type{margin-top:0;}
 .player-card .ledger-row{font-size:13px; padding:6px 0;}
@@ -515,6 +581,28 @@ dialog.feedback-dialog{
 }
 .lock-btn:hover{border-color:var(--gold-dim); color:var(--gold);}
 .lock-btn.locked{color:var(--teal); border-color:var(--teal);}
+
+/* Gateway button from guide.html to map-view.html — mid-weight between
+   .submit-btn's solid-gold treatment (the page's primary CTA) and
+   .back-link's quiet outline (a low-stakes way back), since this is a
+   meaningful action worth noticing but not the page's main point. */
+.map-view-btn{
+  display:block;
+  width:100%;
+  background:transparent;
+  border:1px solid var(--gold-dim);
+  color:var(--gold);
+  font-family:var(--display);
+  font-size:15px;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  font-weight:600;
+  padding:14px;
+  cursor:pointer;
+  text-align:center;
+  transition:background .12s ease, border-color .12s ease;
+}
+.map-view-btn:hover{background:rgba(201,162,75,0.1); border-color:var(--gold);}
 
 .back-link{
   display:inline-block;

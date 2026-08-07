@@ -344,6 +344,38 @@ function renderLootList(){
       const controls = document.createElement('div');
       controls.className = 'item-controls';
 
+      // Optional cosmetic sub-type picker, driven entirely by the catalog's
+      // `variants` array (only Gemstone has one today — the gem that spawns
+      // in the Crisp Gallery varies per run). Purely descriptive: it never
+      // touches value, weight, eligibility, or packing — it just rides
+      // along in saved state so guide.html can name the gem. Built and
+      // appended FIRST (before the value input/checkbox below), so it's
+      // also first in real DOM order — visual order, DOM order, and Tab
+      // order all agree ("what is it, then what's it worth," then Tab
+      // moves into the value input, then on to the next row). A CSS-only
+      // reordering trick (`order:-1`, then a `grid-column` attempt) was
+      // tried here first and both failed the same way — confirmed
+      // 2026-08-06 that this browser follows plain DOM order for Tab
+      // regardless of visual `order`/`grid-column` placement, so DOM
+      // order is the only lever that actually works.
+      if (Array.isArray(cat.variants) && cat.variants.length){
+        const variantSel = document.createElement('select');
+        variantSel.className = 'variant-select';
+        variantSel.setAttribute('aria-label', `${cat.variantLabel || 'Type'}: ${cat.name}`);
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = cat.variantLabel || 'Type';
+        variantSel.appendChild(blank);
+        cat.variants.forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v; opt.textContent = v;
+          variantSel.appendChild(opt);
+        });
+        variantSel.value = item.variant || '';
+        variantSel.addEventListener('change', e => { item.variant = e.target.value; renderAll(false); });
+        controls.appendChild(variantSel);
+      }
+
       if (cat.valueType === 'checkbox'){
         // Fixed-value checkbox item (e.g. BAY / Delivery Truck Crate):
         // checked -> value locked to cat.fixedValue; unchecked -> excluded entirely.
@@ -373,31 +405,6 @@ function renderLootList(){
         valInput.value = item.value; valInput.dataset.f = 'val';
         valInput.addEventListener('input', e => { item.value = e.target.value === '' ? '' : Number(e.target.value); renderAll(false); });
         controls.appendChild(valInput);
-      }
-
-      // Optional cosmetic sub-type picker, driven entirely by the catalog's
-      // `variants` array (only Gemstone has one today — the gem that spawns
-      // in the Crisp Gallery varies per run). Purely descriptive: it never
-      // touches value, weight, eligibility, or packing — it just rides
-      // along in saved state so guide.html can name the gem. Deliberately
-      // rendered AFTER the value input so the documented tab order above
-      // (click row, Tab once -> value input) is unchanged.
-      if (Array.isArray(cat.variants) && cat.variants.length){
-        const variantSel = document.createElement('select');
-        variantSel.className = 'variant-select';
-        variantSel.setAttribute('aria-label', `${cat.variantLabel || 'Type'}: ${cat.name}`);
-        const blank = document.createElement('option');
-        blank.value = '';
-        blank.textContent = cat.variantLabel || 'Type';
-        variantSel.appendChild(blank);
-        cat.variants.forEach(v => {
-          const opt = document.createElement('option');
-          opt.value = v; opt.textContent = v;
-          variantSel.appendChild(opt);
-        });
-        variantSel.value = item.variant || '';
-        variantSel.addEventListener('change', e => { item.variant = e.target.value; renderAll(false); });
-        controls.appendChild(variantSel);
       }
 
       row.appendChild(controls);
