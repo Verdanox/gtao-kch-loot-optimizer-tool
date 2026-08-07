@@ -178,11 +178,21 @@ confirmation dialog on unlock.
   reachable marked items aren't force-included either, since forfeiture
   is already locked in and forcing them could only cost bag value for a
   bonus that can't pay out.
-- **Bag assignment follows a four-tier, value-preserving preference**
-  (rewritten 2026-08-02, extended 2026-08-03, widened 2026-08-04):
-  `packBins()`'s reconstruction step chooses *which bin* an item lands in —
-  never which items get chosen or the total secondary value — by, in
-  order: (1) `Second` and `Crisp Gallery` items prefer the host's bag
+- **Bag assignment follows a five-tier, value-preserving preference**
+  (rewritten 2026-08-02, extended 2026-08-03, widened 2026-08-04, Vault
+  tier added 2026-08-07): `packBins()`'s reconstruction step chooses
+  *which bin* an item lands in — never which items get chosen or the
+  total secondary value — by, in order: (0) `Vault` items exclude the
+  host's bag specifically, whenever a non-host bag is also available
+  (`HOST_AVOID_FLOORS`) — confirmed with the user 2026-08-07: the host
+  alone must physically enter the Vault for the Primary Target, so
+  routing Vault secondary loot to a teammate instead lets it be grabbed
+  in parallel rather than requiring the host to double back for it after
+  the primary grab, which matters for the Elite Challenge's 17-minute
+  clock. This reverses the floor's previous "deliberately neutral"
+  status — falls back to including the host only when they're the sole
+  remaining valid bag (a solo run, or every other bag already full);
+  (1) `Second` and `Crisp Gallery` items prefer the host's bag
   specifically (`HOST_PRIORITY_FLOORS`, shared with
   `assignItemsToBags()`'s own separate mechanism below). `Crisp Gallery`'s
   piece of this is the original, narrower exception — the host is the more
@@ -193,16 +203,14 @@ confirmation dialog on unlock.
   (2-4 players), and Loading Bay is mutually exclusive with that Vault
   visit by game mechanics (can be sequenced before or after, but not
   combined into one pass) — so the host's route naturally continues on to
-  the building's 2nd floor (`Second` + `Crisp Gallery`) afterward. `Vault`
-  and `Loading Bay` were deliberately **not** added to this tier: the whole
-  crew is physically present for the Vault sequence, not just the host, so
-  there's no logistics/adjacency reason to bias Vault loot toward any one
-  player — it's already the lowest-value-per-weight floor in the KCH, so
-  it's naturally deprioritized by the value-maximizing search on its own,
-  no tier needed; Loading Bay is isolated with no clustering upside either
-  way, and can still land in the host's bag when capacity/ordering happens
-  to put it there — that's fine, since the host just sequences it before
-  or after the Vault trip rather than combining them; (2) otherwise, prefer
+  the building's 2nd floor (`Second` + `Crisp Gallery`) afterward.
+  `Loading Bay` was deliberately **not** added to this tier: it's isolated
+  with no clustering upside either way, and can still land in the host's
+  bag when capacity/ordering happens to put it there — that's fine, since
+  the host just sequences it before or after the Vault trip rather than
+  combining them. (`Vault` is excluded from *this* tier for a different
+  reason than Loading Bay — see tier 0 above, which now actively routes it
+  away from the host instead of leaving it neutral.) (2) otherwise, prefer
   a bin that already contains an item on the same floor (general
   floor-clustering, so a crew spends less time running between floors);
   (3) otherwise, prefer a bin that already contains an item on an
@@ -213,7 +221,7 @@ confirmation dialog on unlock.
   live testing showed a player routed straight from `Alarm Floor` to
   `Second`, skipping past `First`; (4) otherwise, prefer whichever bin
   has the most remaining capacity (spreads items across players by
-  default). All four tiers only ever choose among bins already confirmed
+  default). All five tiers only ever choose among bins already confirmed
   to preserve the optimizer's optimal total value — none of this can
   cost secondary value, and each tier falls through to the next when no
   value-preserving bin satisfies it, exactly like tier 1's host-bag

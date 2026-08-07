@@ -170,7 +170,10 @@ test('Crisp Gallery items prefer the host bin even when least-loaded would pick 
 });
 
 test('Crisp Gallery preference falls through gracefully when the host bin truly has no room', () => {
-  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'Vault' }]; // fills bin 0 completely
+  // Filler is 'First', not 'Vault' — a Vault filler would itself get
+  // routed away from bin 0 by tier 0 (2026-08-07), which would leave the
+  // host bin free and defeat the point of this test (host bin truly full).
+  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'First' }]; // fills bin 0 completely
   const optional = [{ id: 'G', value: 50, weightUnits: 10, floor: 'Crisp Gallery' }];
   const result = packBins(mandatory, optional, 2, 100);
   assert.ok(result);
@@ -193,11 +196,13 @@ test('Second-floor items now also prefer the host bin, same as Crisp Gallery', (
   assert.ok(result.bags[0].items.some(i => i.id === 'S'), 'Second-floor item should land with the host despite bin 0 having far less room than bin 1');
 });
 
-test('Vault and Loading Bay items get no host-priority treatment', () => {
-  // A fills bin 0 partway; V (Vault) and L (Loading Bay) each have enough
-  // room to fit in either bin, but neither is host-priority, so they fall
-  // through to tier 4 (least-loaded) and spread rather than piling into
-  // bin 0 with A.
+test('Vault items exclude the host bag but still floor-cluster together via tier 2', () => {
+  // A is mandatory Vault — tier 0 forces it away from bin 0 (host) into
+  // bin 1, since bin 1 is a value-preserving alternative. V shares A's
+  // floor and should still join it there via tier 2 clustering (not
+  // scatter to tier 4's least-loaded fallback). L (Loading Bay) is
+  // unrelated to Vault's host-avoidance or floor-clustering, so it's free
+  // to land wherever tier 4 sends it — the now-emptier host bag.
   const mandatory = [{ id: 'A', value: 500, weightUnits: 60, floor: 'Vault' }];
   const optional = [
     { id: 'V', value: 50, weightUnits: 30, floor: 'Vault' },
@@ -206,13 +211,42 @@ test('Vault and Loading Bay items get no host-priority treatment', () => {
   const result = packBins(mandatory, optional, 2, 100);
   assert.ok(result);
   const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
-  // V shares A's floor, so tier 2 (floor-clustering) legitimately puts it
-  // with A — that's expected and not what this test is about.
-  assert.equal(bagOf('V'), bagOf('A'), 'V shares a floor with A and should cluster via tier 2, not tier 1');
-  // L is on an isolated floor with no relation to A/V's floor — it should
-  // NOT be pulled toward the host bin the way a Second/Crisp Gallery item
-  // would be; least-loaded (tier 4) should send it to the emptier bin 1.
-  assert.notEqual(bagOf('L'), bagOf('A'), 'Loading Bay should never get a host-priority nudge');
+  assert.notEqual(bagOf('A'), 0, 'Vault items should never land in the host bag when a non-host bag is available');
+  assert.equal(bagOf('V'), bagOf('A'), 'V shares A\'s floor and should still cluster via tier 2 among non-host bags');
+  assert.equal(bagOf('L'), 0, 'Loading Bay is unaffected by Vault host-avoidance and falls back to the emptier (host) bag via tier 4');
+});
+
+test('a lone Vault item is routed away from the host bag when a non-host bag is available', () => {
+  // With two empty, symmetric bins, the old tier-4 ascending-index
+  // tiebreak would have landed this in bin 0 (host). Tier 0 must now
+  // force it to bin 1 instead.
+  const mandatory = [{ id: 'A', value: 100, weightUnits: 50, floor: 'Vault' }];
+  const result = packBins(mandatory, [], 2, 100);
+  assert.ok(result);
+  assert.equal(result.bags[0].items.length, 0, 'host bag should stay empty when a non-host bag can take the Vault item instead');
+  assert.ok(result.bags[1].items.some(i => i.id === 'A'), 'Vault item should land in the non-host bag');
+});
+
+test('a Vault item still packs into the host bag when it is the only bag (solo run)', () => {
+  const mandatory = [{ id: 'A', value: 100, weightUnits: 50, floor: 'Vault' }];
+  const result = packBins(mandatory, [], 1, 100);
+  assert.ok(result);
+  assert.ok(result.bags[0].items.some(i => i.id === 'A'), 'with only one bag, the Vault item must still be packed into it');
+});
+
+test('a Vault item falls back to the host bag when the non-host bag no longer has room', () => {
+  // A (weight 90) fills most of bin 1 via tier 0. B (weight 50) no longer
+  // fits in bin 1 (only 10 remaining), so it must fall back to bin 0
+  // despite tier 0's usual host-avoidance.
+  const mandatory = [
+    { id: 'A', value: 100, weightUnits: 90, floor: 'Vault' },
+    { id: 'B', value: 100, weightUnits: 50, floor: 'Vault' },
+  ];
+  const result = packBins(mandatory, [], 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.equal(bagOf('A'), 1, 'first Vault item routes to the non-host bag');
+  assert.equal(bagOf('B'), 0, 'second Vault item falls back to the host bag once the non-host bag lacks room');
 });
 
 // Regression coverage for the 2026-08-03 adjacent-floor tie-break: a

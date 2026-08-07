@@ -107,12 +107,24 @@ export function knapsack(items, capacityUnits) {
 // real in-heist routing (mandatory Vault trip for the primary target
 // naturally continues on to the building's 2nd floor — Second and Crisp
 // Gallery) that the *same* two floors are the right host-priority set for
-// packBins()'s own, unrelated tier-1 bin-choice mechanism. Vault and
-// Loading Bay were deliberately considered and excluded — see packBins()'s
-// tier-1 comment for why. assignItemsToBags()'s own sort-weight-boost
-// mechanism below is otherwise untouched.
+// packBins()'s own, unrelated tier-1 bin-choice mechanism. Loading Bay was
+// deliberately considered and excluded — see packBins()'s tier-1 comment
+// for why. Vault was excluded from THIS set for a different reason
+// (2026-08-07): it now gets its own, opposite-direction tier — see
+// HOST_AVOID_FLOORS and packBins()'s tier-0 comment below.
+// assignItemsToBags()'s own sort-weight-boost mechanism below is otherwise
+// untouched.
 const HOST_PRIORITY_FLOORS = new Set(['Second', 'Crisp Gallery']);
 const HOST_PRIORITY_BOOST = 8;
+
+// packBins()'s tier 0 (2026-08-07): floors the host should NOT carry
+// whenever a non-host bag can take the item instead — the mirror image of
+// HOST_PRIORITY_FLOORS above. See packBins()'s tier-0 comment for the full
+// rationale (parallelizing the mandatory Vault trip with a teammate
+// grabbing Vault secondary loot, for the Elite Challenge's 17-minute
+// clock). Not read by assignItemsToBags() — that function keeps its own,
+// separate, untouched host-priority-only mechanism.
+const HOST_AVOID_FLOORS = new Set(['Vault']);
 
 // First-Fit-Decreasing bin pack: distributes chosen items across `players`
 // individual bags of `capacityPerPlayer` each. Index 0 is always the host.
@@ -156,17 +168,29 @@ function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 // item ever broke that pattern; see the "power drill loot" note in
 // secondary-loot.json's _notes for why that's not expected.
 //
-// Bin CHOICE during reconstruction (below) follows a four-tier
-// preference, applied uniformly to mandatory and optional items alike —
-// this replaced an earlier version (2026-08-02) that tried bin 0 first
-// for literally every item, which is why Buyer's Choice loot always used
-// to land entirely in the host's bag (a real bug, not a rule: mandatory
-// items are processed first, while bins are still symmetric, so bin 0
-// won that tie almost every time). All four tiers only ever choose
-// AMONG bins already confirmed (via `solve()`) to preserve the DP's
-// optimal total value — none of this can ever cost secondary value,
-// which matters because every player's career progress is driven by
-// that same total (see computeCareerProgress below), split evenly:
+// Bin CHOICE during reconstruction (below) follows a five-tier
+// preference (tier 0 added 2026-08-07), applied uniformly to mandatory
+// and optional items alike — this replaced an earlier version
+// (2026-08-02) that tried bin 0 first for literally every item, which is
+// why Buyer's Choice loot always used to land entirely in the host's bag
+// (a real bug, not a rule: mandatory items are processed first, while
+// bins are still symmetric, so bin 0 won that tie almost every time).
+// Every tier only ever chooses AMONG bins already confirmed (via
+// `solve()`) to preserve the DP's optimal total value — none of this can
+// ever cost secondary value, which matters because every player's career
+// progress is driven by that same total (see computeCareerProgress
+// below), split evenly:
+//   0. Vault items exclude bin 0 (the host) whenever a non-host,
+//      value-preserving bin is also available — HOST_AVOID_FLOORS,
+//      confirmed with the user 2026-08-07. The host alone must
+//      physically enter the Vault for the Primary Target; routing Vault
+//      secondary loot to a teammate instead lets it be grabbed in
+//      parallel rather than requiring the host to double back for it
+//      after the primary grab, which matters for the Elite Challenge's
+//      17-minute clock. This is the mirror image of tier 1 below (which
+//      pulls loot TOWARD the host) and falls back to including the host
+//      when they're the only remaining valid bin (a solo run, or every
+//      other bag already full).
 //   1. Second and Crisp Gallery items prefer bin 0 (the host) —
 //      HOST_PRIORITY_FLOORS, shared with assignItemsToBags() above.
 //      Crisp Gallery's own rationale (confirmed with the user
@@ -177,12 +201,11 @@ function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 //      for the primary target at every crew size, and Loading Bay is
 //      mutually exclusive with that Vault visit — so the host's route
 //      naturally continues on to the building's 2nd floor (Second +
-//      Crisp Gallery) afterward. Vault and Loading Bay were deliberately
-//      NOT added: the whole crew is physically present for the Vault
-//      sequence (not just the host), so there's no logistics reason to
-//      bias Vault loot toward any one player — it's low-value filler
-//      already handled correctly by the value-maximizing search above.
-//      Loading Bay is isolated with no adjacency upside either way.
+//      Crisp Gallery) afterward. Loading Bay was deliberately NOT added
+//      here: it's isolated with no adjacency upside either way, and can
+//      still land in the host's bag when capacity/ordering happens to
+//      put it there — that's fine, since the host just sequences it
+//      before or after the Vault trip rather than combining them.
 //   2. Otherwise, prefer a bin that already contains an item sharing the
 //      same `.floor` — general floor-clustering, so a crew spends less
 //      time running between floors to collect their assigned loot.
@@ -293,9 +316,10 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
   if (totalValue === NEG) return null;
 
   // Reconstruct one concrete assignment matching that optimal value,
-  // choosing among value-preserving bins via the four-tier preference
-  // documented above (host-priority-floor, then floor-clustering, then
-  // adjacent-floor-clustering, then least-loaded, then ascending index).
+  // choosing among value-preserving bins via the five-tier preference
+  // documented above (Vault-avoid-host, then host-priority-floor, then
+  // floor-clustering, then adjacent-floor-clustering, then least-loaded,
+  // then ascending index).
   const bagsOut = Array.from({ length: bins }, () => ({ items: [], value: 0, weightUsed: 0 }));
   let caps = initCaps.slice();
   for (let i = 0; i < items.length; i++) {
@@ -303,12 +327,28 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
     const target = solve(i, caps);
     if (!it.mandatory && solve(i + 1, caps) === target) continue; // optimal path leaves this item out
 
-    const candidates = [];
+    let candidates = [];
     for (let b = 0; b < bins; b++) {
       if (caps[b] < it.w) continue;
       const next = caps.slice();
       next[b] -= it.w;
       if (it.value + solve(i + 1, next) === target) candidates.push({ b, next });
+    }
+
+    // Tier 0 (2026-08-07): Vault items exclude the host's bag (bin 0)
+    // whenever a non-host, value-preserving bin is also available. The
+    // host alone must enter the Vault for the Primary Target — routing
+    // Vault secondary loot to a teammate instead lets it be grabbed in
+    // parallel rather than requiring the host to double back for it,
+    // which matters for the Elite Challenge's 17-minute clock. This is
+    // the mirror image of tier 1 below (which pulls loot TOWARD the
+    // host) but follows the identical value-preserving rule: it only
+    // ever narrows among candidates already confirmed not to cost the
+    // optimal total, and falls back to including the host when they're
+    // the only remaining valid bag (solo runs, or every other bag full).
+    if (HOST_AVOID_FLOORS.has(it.floor)) {
+      const nonHost = candidates.filter(c => c.b !== 0);
+      if (nonHost.length > 0) candidates = nonHost;
     }
 
     // Tier 1 (2026-08-04, widened from Crisp-Gallery-only): the host must
@@ -319,12 +359,10 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
     // additionally keeps its original EMP-desync rationale (the host is the
     // more reliable player to verify in-room presence there) — that fact
     // doesn't extend to Second, but the routing argument above does.
-    // Vault and Loading Bay were deliberately NOT added here: the whole
-    // crew is physically present for the Vault sequence (not just the
-    // host), so there's no logistics/adjacency reason to bias Vault loot
-    // toward any one player — it's low-value filler already handled
-    // correctly by the value-maximizing search above, no tier needed.
-    // Loading Bay is isolated with no adjacency upside either way.
+    // Loading Bay was deliberately NOT added here: it's isolated with no
+    // adjacency upside either way. Vault is excluded from THIS tier for a
+    // different reason — see tier 0 above, which now actively routes it
+    // AWAY from the host instead.
     let chosen;
     if (HOST_PRIORITY_FLOORS.has(it.floor)) {
       chosen = candidates.find(c => c.b === 0);
