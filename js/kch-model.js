@@ -409,6 +409,21 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
 // exact same unconstrained value-max knapsack used when Elite isn't
 // attempted at all — Buyer's Choice weighting is dropped entirely, not
 // partially honored.
+//
+// The Buyer's Request bonus is decoupled from the Elite Challenge toggle
+// (2026-08-07, real bug report: a 3-player run whose value-max optimal
+// bag naturally included every marked item, but the bonus still showed
+// as unearned purely because Elite wasn't toggled on). Buyer's Request
+// only ever required *having* all the marked items, not attempting Elite
+// — Elite is a separate, harder contract (the 17-minute clock) layered on
+// top. So `buyerRequestBonusEach` below is now earned whenever the
+// unconstrained pack happens to include every marked-and-scoped item too,
+// even with Elite off — the >=2-picks minimum still applies either way
+// (confirmed with the user 2026-08-07: it's a Buyer's-Choice-contract
+// minimum, not an Elite-specific one). `eliteBonusEach` stays gated
+// strictly behind the Elite toggle, unchanged — completing it depends on
+// live-execution conditions this tool can't verify from bag contents
+// alone, unlike simply having grabbed the marked items.
 export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstants) {
   const valid = state.loot.filter(l => l.value !== '' && l.value !== null && l.value !== undefined && !isNaN(l.value));
   const eligible = valid.filter(l => itemById(catalog, l.itemId).minPlayers <= state.players);
@@ -480,7 +495,20 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
 
   const bonuses = bonusAmounts(state.difficulty, bonusConstants);
   const eliteEligible = attempted && allBuyerItemsFit;
-  const buyerRequestBonusEach = eliteEligible ? bonuses.buyerRequest : 0;
+  // Decoupled Buyer's Request check (see the doc comment above
+  // runOptimizer): true when every marked-and-scoped Buyer's Choice item
+  // ended up in the chosen bag selection ANYWAY, even without Elite
+  // forcing them in. Still needs >=2 marked picks, same as the Elite path
+  // — a single marked item was never enough to be a real Buyer's Choice
+  // contract, Elite or not. Only ever consulted when Elite wasn't
+  // attempted; when it was, `eliteEligible` already covers the earned
+  // case, and the forced-mandatory-pack forfeiture path (attempted but
+  // not allBuyerItemsFit) can never have packed every marked item anyway
+  // — if it could, packBins() would have returned a non-null result for
+  // the mandatory set in the first place.
+  const allBuyerItemsPacked = bcIdsSet.size >= 2 && [...bcIdsSet].every(id => chosenIds.has(id));
+  const buyerRequestEarned = eliteEligible || (!attempted && allBuyerItemsPacked);
+  const buyerRequestBonusEach = buyerRequestEarned ? bonuses.buyerRequest : 0;
   const eliteBonusEach = eliteEligible ? bonuses.elitePerPlayer : 0;
   const planningFee = state.weekly === 'repeat' ? bonusConstants.repeatRunFee : 0;
   // Every player's secondary-loot cut is the SAME number — the pooled

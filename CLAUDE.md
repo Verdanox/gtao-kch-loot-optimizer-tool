@@ -279,20 +279,38 @@ confirmation dialog on unlock.
   smaller crew's lower share can genuinely mean fewer reachable items, not
   just a bigger total split more ways; `guide.html`'s panel says this
   explicitly rather than leaving it to be inferred from the numbers alone.
-- **Buyer's Choice is conditional on Elite Challenge, and needs at least
-  2 picks.** Marking up to three items as Buyer's Choice only affects
-  packing when Elite Challenge is toggled on. With Elite off, Buyer's
-  Choice tags are purely informational (still shown in the manifest) and
-  the optimizer runs a single unconstrained pack over all scoped items to
-  maximize bag value — no forced inclusion, no Buyer's Request/Elite
-  bonus, no overflow state. **A single marked item can never satisfy
-  Elite Challenge** (confirmed 2026-08-03, direct game knowledge) — 0 and
-  1 marked-and-scoped picks resolve identically to "not attempted" (same
-  unconstrained pack, no bonus), only 2 or 3 actually lock packing and
-  put the bonuses in play. `guide.html` shows an explicit warning for
-  both the 0- and 1-pick case (one shared message, parameterized only by
-  the count) rather than leaving it inferable only from the Finale
-  Result's "not attempted" label.
+- **Buyer's Choice *packing* is conditional on Elite Challenge, and needs
+  at least 2 picks — but the Buyer's Request *bonus* is not conditional on
+  Elite (decoupled 2026-08-07, see below).** Marking up to three items as
+  Buyer's Choice only forces them into packing when Elite Challenge is
+  toggled on. With Elite off, Buyer's Choice tags are purely informational
+  in the manifest and the optimizer runs a single unconstrained pack over
+  all scoped items to maximize bag value — no forced inclusion, no
+  overflow state. **A single marked item can never satisfy Elite
+  Challenge** (confirmed 2026-08-03, direct game knowledge) — 0 and 1
+  marked-and-scoped picks resolve identically to "not attempted" for
+  packing purposes (same unconstrained pack), only 2 or 3 actually lock
+  packing. `guide.html` shows an explicit warning for both the 0- and
+  1-pick case (one shared message, parameterized only by the count)
+  rather than leaving it inferable only from the Finale Result's "not
+  attempted" label.
+- **Buyer's Request bonus is earned whenever the chosen bag selection
+  happens to include every marked-and-scoped Buyer's Choice item, whether
+  or not Elite Challenge was ever toggled on** (fixed 2026-08-07, real bug
+  report: a 3-player run whose value-max *unconstrained* pack naturally
+  contained all the marked items, but the tool still reported the bonus
+  as unearned solely because Elite was off). Buyer's Request was always
+  meant to reward *having* the marked items — Elite Challenge is a
+  separate, harder contract (the sub-17-minute clock) layered on top, not
+  a prerequisite for this bonus. The same >=2-marked-picks minimum still
+  applies regardless of Elite status (confirmed with the user 2026-08-07:
+  it's a Buyer's-Choice-contract minimum, not an Elite-specific one), so a
+  single incidentally-packed marked item still never earns it. The Elite
+  Challenge bonus itself is **not** decoupled — it still requires the
+  toggle, since completing it depends on live-execution conditions (the
+  clock) this tool can't verify from bag contents alone, unlike simply
+  having grabbed the marked items. `runOptimizer()`'s `buyerRequestBonusEach`
+  reflects this; `eliteBonusEach` is untouched.
 - **Buyer's Request, Elite Challenge, and Helper bonuses all double on
   Hard mode**: $50k Buyer's Request / $50k-per-player Elite / $100k
   Helper on Normal, $100k / $100k-per-player / $200k on Hard.

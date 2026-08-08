@@ -132,3 +132,64 @@ for (const count of [2, 3]) {
     assert.equal(r.attempted, true);
   });
 }
+
+// Regression coverage for the 2026-08-07 fix: Buyer's Request bonus is
+// decoupled from the Elite Challenge toggle — it's earned whenever the
+// chosen bag selection happens to include every marked-and-scoped item,
+// even with Elite off. Real bug report: a 3-player run whose value-max
+// unconstrained pack naturally contained all the marked items, but the
+// bonus still showed as unearned solely because Elite wasn't toggled on.
+function stateWithElite(elite, overrides) {
+  return {
+    primaryId: 'la-derniere-debauche', difficulty: 'normal', weekly: 'first',
+    players: 1, elite,
+    loot: catalog.map(cat => {
+      const o = overrides[cat.itemId];
+      return {
+        itemId: cat.itemId,
+        value: o && o.value !== undefined ? o.value : '',
+        buyersChoice: o ? !!o.buyersChoice : false
+      };
+    })
+  };
+}
+
+test("Buyer's Request bonus is earned with Elite off when the unconstrained pack happens to include every marked item", () => {
+  // B-A and B-B are both Vault, weight 50, minPlayers 1 — with nothing
+  // else scoped, both trivially fit together in one 100-capacity bag, so
+  // the value-max unconstrained pack (Elite off) includes both anyway.
+  const state = stateWithElite('no', {
+    'B-A': { value: 100000, buyersChoice: true },
+    'B-B': { value: 90000, buyersChoice: true }
+  });
+  const r = runOptimizer(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  assert.equal(r.attempted, false, 'Elite was never toggled on');
+  assert.ok(r.chosenIds.has('B-A') && r.chosenIds.has('B-B'), 'both marked items should be packed');
+  assert.ok(r.buyerRequestBonusEach > 0, 'Buyer\'s Request should be earned even though Elite was never attempted');
+  assert.equal(r.eliteBonusEach, 0, 'Elite bonus stays gated behind the toggle, unaffected by this decoupling');
+});
+
+test("Buyer's Request bonus is NOT earned with Elite off when the unconstrained pack excludes one marked item", () => {
+  // B-A, B-B, B-C are all Vault, weight 50 each, minPlayers 1 — three of
+  // them (150 weight) can't all fit in a single 1-player 100-capacity
+  // bag. The value-max pack keeps the two highest-value items (A, B) and
+  // drops C, so not every marked item is packed.
+  const state = stateWithElite('no', {
+    'B-A': { value: 100000, buyersChoice: true },
+    'B-B': { value: 90000, buyersChoice: true },
+    'B-C': { value: 80000, buyersChoice: true }
+  });
+  const r = runOptimizer(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  assert.ok(r.chosenIds.has('B-A') && r.chosenIds.has('B-B'), 'the two highest-value marked items should still be packed');
+  assert.ok(!r.chosenIds.has('B-C'), 'the lowest-value marked item should be left out by the value-max pack');
+  assert.equal(r.buyerRequestBonusEach, 0, 'not every marked item was packed, so the bonus is not earned');
+});
+
+test("a single incidentally-packed marked item still does not earn Buyer's Request with Elite off (>=2-picks minimum applies either way)", () => {
+  const state = stateWithElite('no', {
+    'B-A': { value: 100000, buyersChoice: true }
+  });
+  const r = runOptimizer(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  assert.ok(r.chosenIds.has('B-A'), 'the only scoped item is trivially packed');
+  assert.equal(r.buyerRequestBonusEach, 0, 'a single marked item never satisfies the Buyer\'s Choice contract, Elite or not');
+});
