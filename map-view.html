@@ -119,6 +119,21 @@ function playerLabel(i){
   return name ? `${name} — ${base}` : base;
 }
 
+// Abbreviated form ("P1"/"P2"/...) used only in the Floor Maps legend
+// (2026-08-07, real UX finding: a genuinely long player name still
+// truncated there even with the ellipsis/max-width handling already in
+// place, since "Player 2" alone ate 8 of the label's limited characters).
+// Dropping "Host"/"Player" entirely — uniform "P1"-style labels for every
+// slot, including the host — buys back that room without changing what
+// the label conveys: the legend's only job is mapping a color to a name,
+// and "Host" is already established elsewhere (Who Grabs What, the
+// Loading Bay callout) via playerLabel() above, which is untouched.
+function playerShortLabel(i){
+  const name = (state.playerNames && state.playerNames[i]) ? state.playerNames[i].trim() : '';
+  const base = `P${i + 1}`;
+  return name ? `${name} — ${base}` : base;
+}
+
 // Reminder-only banner (not gating): warns if any *packed* item needs a
 // prep mission the optimizer has no way to know was actually done. Names
 // only the specific items present this run, not a generic catch-all.
@@ -313,7 +328,7 @@ function renderFloorMaps(r){
       // forcing a horizontal scrollbar on the page.
       const label = document.createElement('span');
       label.className = 'map-legend-label';
-      label.textContent = playerLabel(i);
+      label.textContent = playerShortLabel(i);
       label.title = playerLabel(i);
       item.appendChild(label);
       legend.appendChild(item);

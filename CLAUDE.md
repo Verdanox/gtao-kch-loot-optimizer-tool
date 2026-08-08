@@ -105,7 +105,16 @@ would show unusable swatches for players not even in this run). Repeated
 on every card rather than shown once for the whole section, deliberately:
 the host screenshots individual floor cards to share with teammates, and
 each screenshot needs to read correctly on its own without the rest of
-the page for context.
+the page for context. The legend's visible label uses `playerShortLabel()`
+(`"P1"`/`"P2"`/etc., 2026-08-07 UX-review fix), not `playerLabel()`'s
+fuller `"Host (P1)"`/`"Player N"` form used everywhere else — a real,
+genuinely long player name still overflowed the legend's ellipsis/
+max-width handling because "Player 2" alone ate 8 of the label's limited
+characters; dropping to a uniform `"PN"` (host included) buys back that
+room without losing any information the legend's color-to-name job
+actually needs. `label.title` still holds the full `playerLabel()` form,
+so hovering a legend entry reveals "Host"/"Player N" same as before —
+only the always-visible text is abbreviated.
 
 **Loading Bay gets a text-only callout card, not a map — and it sits
 first, ahead of every real map (moved there 2026-08-06).** It's the one
@@ -215,21 +224,22 @@ styling lives in `css/kch-styles.css`, linked from all three.
     `aria-label`) — not just a small checkbox — while the value input (and
     BAY's own checkbox) remain independently clickable/typeable inside it.
   - **`floorMaps` (top-level, not per-item) + per-item `xPct`/`yPct`** —
-    data backing `guide.html`'s "Floor Maps" section (see "Pages" above).
+    data backing `map-view.html`'s "Floor Maps" section (see "Pages"
+    above — this section lives on `map-view.html`, not `guide.html`).
     `floorMaps` is a `floor` name → map image path lookup, many-to-one
-    (`Second` and `Crisp Gallery` are two `floor` values slated to share
-    one physical-level image, so the map asset can't be derived from
-    `floor` by naive slug). A floor with no `floorMaps` entry (e.g.
-    `Loading Bay` — one item, no visual value in a map) has no map at
-    all; render code treats that as "skip," not an error. Per-item
-    `xPct`/`yPct` are percentage-based, top-left origin (`x` right, `y`
-    down — matches CSS `left`/`top` directly, zero conversion), giving
-    that item's pin position on whichever image its floor resolves to.
-    Alarm Floor (`0-A`/`0-B`/`0-C`) is the only floor tagged with real
-    coordinates so far — deliberately chosen pilot floor (smallest, 3
-    items) to validate pin rendering before tagging the rest; the other
-    floors' items simply have no `xPct`/`yPct` yet, not a different
-    representation of "no data."
+    (`Second` and `Crisp Gallery` share one physical-level image, so the
+    map asset can't be derived from `floor` by naive slug). A floor with
+    no `floorMaps` entry (`Loading Bay` — one item, no visual value in a
+    map) has no map at all; render code treats that as "skip," not an
+    error. Per-item `xPct`/`yPct` are percentage-based, top-left origin
+    (`x` right, `y` down — matches CSS `left`/`top` directly, zero
+    conversion), giving that item's pin position on whichever image its
+    floor resolves to. Alarm Floor (`0-A`/`0-B`/`0-C`) was the pilot floor
+    (smallest, 3 items) used to validate pin rendering first — as of
+    2026-08-06, every mappable floor (Vault, Alarm Floor, First,
+    Second/Crisp Gallery) is fully tagged; only `Loading Bay` has no
+    coordinates, and that's permanent (no `floorMaps` entry at all, not
+    "not tagged yet" — see its text-only callout under "Pages" above).
 
 ## Model module
 `js/kch-model.js` is a pure ES module — no `document`, `fetch`, or
