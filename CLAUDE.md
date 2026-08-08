@@ -311,11 +311,21 @@ confirmation dialog on unlock.
   reachable marked items aren't force-included either, since forfeiture
   is already locked in and forcing them could only cost bag value for a
   bonus that can't pay out.
-- **Bag assignment follows a four-tier, value-preserving preference**
-  (rewritten 2026-08-02, extended 2026-08-03, widened 2026-08-04):
-  `packBins()`'s reconstruction step chooses *which bin* an item lands in —
-  never which items get chosen or the total secondary value — by, in
-  order: (1) `Second` and `Crisp Gallery` items prefer the host's bag
+- **Bag assignment follows a five-tier, value-preserving preference**
+  (rewritten 2026-08-02, extended 2026-08-03, widened 2026-08-04, Vault
+  tier added 2026-08-07): `packBins()`'s reconstruction step chooses
+  *which bin* an item lands in — never which items get chosen or the
+  total secondary value — by, in order: (0) `Vault` items exclude the
+  host's bag specifically, whenever a non-host bag is also available
+  (`HOST_AVOID_FLOORS`) — confirmed with the user 2026-08-07: the host
+  alone must physically enter the Vault for the Primary Target, so
+  routing Vault secondary loot to a teammate instead lets it be grabbed
+  in parallel rather than requiring the host to double back for it after
+  the primary grab, which matters for the Elite Challenge's 17-minute
+  clock. This reverses the floor's previous "deliberately neutral"
+  status — falls back to including the host only when they're the sole
+  remaining valid bag (a solo run, or every other bag already full);
+  (1) `Second` and `Crisp Gallery` items prefer the host's bag
   specifically (`HOST_PRIORITY_FLOORS`, shared with
   `assignItemsToBags()`'s own separate mechanism below). `Crisp Gallery`'s
   piece of this is the original, narrower exception — the host is the more
@@ -326,16 +336,14 @@ confirmation dialog on unlock.
   (2-4 players), and Loading Bay is mutually exclusive with that Vault
   visit by game mechanics (can be sequenced before or after, but not
   combined into one pass) — so the host's route naturally continues on to
-  the building's 2nd floor (`Second` + `Crisp Gallery`) afterward. `Vault`
-  and `Loading Bay` were deliberately **not** added to this tier: the whole
-  crew is physically present for the Vault sequence, not just the host, so
-  there's no logistics/adjacency reason to bias Vault loot toward any one
-  player — it's already the lowest-value-per-weight floor in the KCH, so
-  it's naturally deprioritized by the value-maximizing search on its own,
-  no tier needed; Loading Bay is isolated with no clustering upside either
-  way, and can still land in the host's bag when capacity/ordering happens
-  to put it there — that's fine, since the host just sequences it before
-  or after the Vault trip rather than combining them; (2) otherwise, prefer
+  the building's 2nd floor (`Second` + `Crisp Gallery`) afterward.
+  `Loading Bay` was deliberately **not** added to this tier: it's isolated
+  with no clustering upside either way, and can still land in the host's
+  bag when capacity/ordering happens to put it there — that's fine, since
+  the host just sequences it before or after the Vault trip rather than
+  combining them. (`Vault` is excluded from *this* tier for a different
+  reason than Loading Bay — see tier 0 above, which now actively routes it
+  away from the host instead of leaving it neutral.) (2) otherwise, prefer
   a bin that already contains an item on the same floor (general
   floor-clustering, so a crew spends less time running between floors);
   (3) otherwise, prefer a bin that already contains an item on an
@@ -346,7 +354,7 @@ confirmation dialog on unlock.
   live testing showed a player routed straight from `Alarm Floor` to
   `Second`, skipping past `First`; (4) otherwise, prefer whichever bin
   has the most remaining capacity (spreads items across players by
-  default). All four tiers only ever choose among bins already confirmed
+  default). All five tiers only ever choose among bins already confirmed
   to preserve the optimizer's optimal total value — none of this can
   cost secondary value, and each tier falls through to the next when no
   value-preserving bin satisfies it, exactly like tier 1's host-bag
@@ -387,37 +395,70 @@ confirmation dialog on unlock.
   populates `order` from each item's position in the catalog-ordered
   `eligible` list, so reconstruction now always walks items in true
   catalog order regardless of which end up `mandatory` vs `optional`.
-- **`compareCrewSizes()` (added 2026-08-04) answers "would a different
-  crew size pay more per player?"** for the loot values already entered —
-  a supplementary panel on `guide.html`, never affecting the actual run's
-  result above it. It sweeps player counts 1-4, calling `runOptimizer()`
-  once per size with `elite` forced to `'no'` regardless of the real run's
-  setting — Elite Challenge completion is never guaranteed, so it
-  shouldn't skew which crew size looks best, and forcing Elite off also
-  means Buyer's Choice never constrains packing here, just the plain
-  value-max pack. It reports `secondaryShareEach` only (not the host's
-  full payout with primary/bonuses) — precedented by
-  `internal/kch_calculator_8.2.26.py`'s own solo/duo/trio/quad payout
-  comparison, which computes the analogous "best secondary take"
-  config. Crew size still changes item *eligibility*, not just how a
-  fixed total splits — Crisp Gallery items require `minPlayers: 2`, so a
-  smaller crew's lower share can genuinely mean fewer reachable items, not
-  just a bigger total split more ways; `guide.html`'s panel says this
-  explicitly rather than leaving it to be inferred from the numbers alone.
-- **Buyer's Choice is conditional on Elite Challenge, and needs at least
-  2 picks.** Marking up to three items as Buyer's Choice only affects
-  packing when Elite Challenge is toggled on. With Elite off, Buyer's
-  Choice tags are purely informational (still shown in the manifest) and
-  the optimizer runs a single unconstrained pack over all scoped items to
-  maximize bag value — no forced inclusion, no Buyer's Request/Elite
-  bonus, no overflow state. **A single marked item can never satisfy
-  Elite Challenge** (confirmed 2026-08-03, direct game knowledge) — 0 and
-  1 marked-and-scoped picks resolve identically to "not attempted" (same
-  unconstrained pack, no bonus), only 2 or 3 actually lock packing and
-  put the bonuses in play. `guide.html` shows an explicit warning for
-  both the 0- and 1-pick case (one shared message, parameterized only by
-  the count) rather than leaving it inferable only from the Finale
-  Result's "not attempted" label.
+- **`compareCrewSizes()` (added 2026-08-04, two-column 2026-08-07) answers
+  "would a different crew size pay more per player?"** for the loot values
+  already entered — a supplementary panel on `guide.html`, never affecting
+  the actual run's result above it. It sweeps player counts 1-4, calling
+  `runOptimizer()` **twice** per size: once with `elite` forced to `'no'`
+  (the original "No Elite" column, unchanged since 2026-08-04 —
+  regardless of the real run's setting, since Elite Challenge completion
+  is never guaranteed and shouldn't by itself skew which crew size looks
+  best, so Buyer's Choice never constrains this column's packing, just the
+  plain value-max pack), and once with `elite` forced to `'yes'` (the new
+  "With Elite" column — user request: some crews still go for the Elite
+  Challenge's bonus even though it's deliberately excluded from Career
+  Progress, so whether the crew's actual Buyer's Choice marks still all
+  fit at a given crew size matters to them too). Both columns report
+  `secondaryShareEach` only (not the host's full payout with
+  primary/bonuses) — precedented by `internal/kch_calculator_8.2.26.py`'s
+  own solo/duo/trio/quad payout comparison, which computes the analogous
+  "best secondary take" config. The With-Elite column is deliberately the
+  *same* raw metric, not a fuller number with bonus dollars folded in —
+  forcing Buyer's Choice items into packing can only match or reduce the
+  raw share (never increase it), so the two columns stay directly
+  comparable at a glance, and the bonus itself is presented as the
+  separate reward for that trade-off rather than baked into this number
+  (same reasoning `computeGuidePayout()` already applies to the Elite
+  bonus). Each column highlights its own "best" crew size independently,
+  since forcing Buyer's Choice in at one size can shift which size wins
+  for that column without moving the other. Crew size still changes item
+  *eligibility*, not just how a fixed total splits — Crisp Gallery items
+  require `minPlayers: 2`, so a smaller crew's lower share can genuinely
+  mean fewer reachable items, not just a bigger total split more ways;
+  `guide.html`'s panel says this explicitly rather than leaving it to be
+  inferred from the numbers alone.
+- **Buyer's Choice *packing* is conditional on Elite Challenge, and needs
+  at least 2 picks — but the Buyer's Request *bonus* is not conditional on
+  Elite (decoupled 2026-08-07, see below).** Marking up to three items as
+  Buyer's Choice only forces them into packing when Elite Challenge is
+  toggled on. With Elite off, Buyer's Choice tags are purely informational
+  in the manifest and the optimizer runs a single unconstrained pack over
+  all scoped items to maximize bag value — no forced inclusion, no
+  overflow state. **A single marked item can never satisfy Elite
+  Challenge** (confirmed 2026-08-03, direct game knowledge) — 0 and 1
+  marked-and-scoped picks resolve identically to "not attempted" for
+  packing purposes (same unconstrained pack), only 2 or 3 actually lock
+  packing. `guide.html` shows an explicit warning for both the 0- and
+  1-pick case (one shared message, parameterized only by the count)
+  rather than leaving it inferable only from the Finale Result's "not
+  attempted" label.
+- **Buyer's Request bonus is earned whenever the chosen bag selection
+  happens to include every marked-and-scoped Buyer's Choice item, whether
+  or not Elite Challenge was ever toggled on** (fixed 2026-08-07, real bug
+  report: a 3-player run whose value-max *unconstrained* pack naturally
+  contained all the marked items, but the tool still reported the bonus
+  as unearned solely because Elite was off). Buyer's Request was always
+  meant to reward *having* the marked items — Elite Challenge is a
+  separate, harder contract (the sub-17-minute clock) layered on top, not
+  a prerequisite for this bonus. The same >=2-marked-picks minimum still
+  applies regardless of Elite status (confirmed with the user 2026-08-07:
+  it's a Buyer's-Choice-contract minimum, not an Elite-specific one), so a
+  single incidentally-packed marked item still never earns it. The Elite
+  Challenge bonus itself is **not** decoupled — it still requires the
+  toggle, since completing it depends on live-execution conditions (the
+  clock) this tool can't verify from bag contents alone, unlike simply
+  having grabbed the marked items. `runOptimizer()`'s `buyerRequestBonusEach`
+  reflects this; `eliteBonusEach` is untouched.
 - **Buyer's Request, Elite Challenge, and Helper bonuses all double on
   Hard mode**: $50k Buyer's Request / $50k-per-player Elite / $100k
   Helper on Normal, $100k / $100k-per-player / $200k on Hard.

@@ -427,6 +427,30 @@ dialog.feedback-dialog{
 .ledger-row.total .k{color:var(--gold); font-size:14px; letter-spacing:.05em; text-transform:uppercase; font-family:var(--display);}
 .ledger-row.total .v{color:var(--gold); font-size:22px; font-weight:600; font-family:var(--display);}
 
+/* Crew Size Comparison's two-column (No Elite / With Elite) grid — a
+   plain .ledger-row can't fit a third column, so this is its own grid
+   layout rather than a reuse of addLedgerRow(). */
+.crew-compare{padding:18px 22px;}
+.crew-compare-row{
+  display:grid; grid-template-columns:1fr 110px 110px; column-gap:14px;
+  align-items:baseline; padding:8px 0; border-bottom:1px solid var(--line);
+  font-family:var(--mono); font-size:13px;
+}
+.crew-compare-row.head{
+  color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+  border-bottom:1px solid var(--gold-dim); padding-bottom:8px;
+}
+.crew-compare-row .k{color:var(--muted);}
+.crew-compare-row .k .flag{color:var(--gold); font-family:var(--mono); font-size:10px; margin-left:6px;}
+.crew-compare-row .v{color:var(--text); font-weight:500; text-align:right;}
+.crew-compare-row .v .flag{display:block; color:var(--gold); font-size:9px; margin-top:2px;}
+.crew-compare-row.current{
+  border-bottom:none; border-top:1px solid var(--gold-dim);
+  margin-top:6px; padding-top:14px;
+}
+.crew-compare-row.current .k{color:var(--gold); font-size:14px; letter-spacing:.05em; text-transform:uppercase; font-family:var(--display);}
+.crew-compare-row.current .v{color:var(--gold); font-size:18px; font-weight:600; font-family:var(--display);}
+
 .manifest-title{font-family:var(--mono); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin:4px 0 10px;}
 .manifest-item{
   display:flex; justify-content:space-between; font-size:13px; padding:6px 0 6px 8px;

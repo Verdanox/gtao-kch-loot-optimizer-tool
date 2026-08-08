@@ -38,6 +38,8 @@ test('compareCrewSizes returns exactly 4 entries, players 1 through 4 in order',
   for (const r of results) {
     assert.ok('secondaryBagValue' in r);
     assert.ok('secondaryShareEach' in r);
+    assert.ok('secondaryBagValueWithElite' in r);
+    assert.ok('secondaryShareEachWithElite' in r);
   }
 });
 
@@ -82,4 +84,39 @@ test('crew-size eligibility difference is visible: 1 player loses access to Cris
   // there, not just "the same total split one more way."
   assert.ok(at1.secondaryShareEach < at2.secondaryShareEach,
     `expected 1-player share (${at1.secondaryShareEach}) to be lower than 2-player share (${at2.secondaryShareEach}) due to lost Crisp Gallery eligibility`);
+});
+
+// Regression coverage for the 2026-08-07 two-column addition: a "With
+// Elite" column alongside the existing "No Elite" one, forcing elite:
+// 'yes' with the run's real Buyer's Choice marks at each crew size.
+
+test('the With-Elite column matches a direct runOptimizer call with elite forced on, at every crew size', () => {
+  const results = compareCrewSizes(fixtureState(2), catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  for (const r of results) {
+    const direct = runOptimizer({ ...fixtureState(2), players: r.players, elite: 'yes' }, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+    assert.equal(r.secondaryBagValueWithElite, direct.secondaryBagValue, `players=${r.players}`);
+    assert.equal(r.secondaryShareEachWithElite, direct.secondaryShareEach, `players=${r.players}`);
+  }
+});
+
+test('No-Elite and With-Elite columns can diverge sharply when Buyer\'s Choice genuinely constrains packing', () => {
+  // Solo run, 100-capacity bag. B-A (unmarked, weight 50) is worth far
+  // more than 0-A + 2-B combined (both marked, weight 30 each). Without
+  // Elite, the value-max pack keeps B-A plus whichever marked item still
+  // fits (weight 50+30=80). With Elite, both marked items are forced in
+  // (weight 60), crowding out B-A entirely (60+50=110 > 100 capacity).
+  const state = {
+    primaryId: 'la-derniere-debauche', difficulty: 'normal', weekly: 'first',
+    players: 1, elite: 'no',
+    loot: catalog.map(cat => {
+      if (cat.itemId === 'B-A') return { itemId: cat.itemId, value: 1000000, buyersChoice: false };
+      if (cat.itemId === '0-A' || cat.itemId === '2-B') return { itemId: cat.itemId, value: 10000, buyersChoice: true };
+      return { itemId: cat.itemId, value: '', buyersChoice: false };
+    })
+  };
+  const results = compareCrewSizes(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  const at1 = results.find(r => r.players === 1);
+
+  assert.equal(at1.secondaryShareEach, 1010000, 'without Elite, the pack keeps B-A plus one marked item');
+  assert.equal(at1.secondaryShareEachWithElite, 20000, 'with Elite, both marked items are forced in, crowding out B-A entirely');
 });
