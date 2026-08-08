@@ -262,23 +262,38 @@ confirmation dialog on unlock.
   populates `order` from each item's position in the catalog-ordered
   `eligible` list, so reconstruction now always walks items in true
   catalog order regardless of which end up `mandatory` vs `optional`.
-- **`compareCrewSizes()` (added 2026-08-04) answers "would a different
-  crew size pay more per player?"** for the loot values already entered —
-  a supplementary panel on `guide.html`, never affecting the actual run's
-  result above it. It sweeps player counts 1-4, calling `runOptimizer()`
-  once per size with `elite` forced to `'no'` regardless of the real run's
-  setting — Elite Challenge completion is never guaranteed, so it
-  shouldn't skew which crew size looks best, and forcing Elite off also
-  means Buyer's Choice never constrains packing here, just the plain
-  value-max pack. It reports `secondaryShareEach` only (not the host's
-  full payout with primary/bonuses) — precedented by
-  `internal/kch_calculator_8.2.26.py`'s own solo/duo/trio/quad payout
-  comparison, which computes the analogous "best secondary take"
-  config. Crew size still changes item *eligibility*, not just how a
-  fixed total splits — Crisp Gallery items require `minPlayers: 2`, so a
-  smaller crew's lower share can genuinely mean fewer reachable items, not
-  just a bigger total split more ways; `guide.html`'s panel says this
-  explicitly rather than leaving it to be inferred from the numbers alone.
+- **`compareCrewSizes()` (added 2026-08-04, two-column 2026-08-07) answers
+  "would a different crew size pay more per player?"** for the loot values
+  already entered — a supplementary panel on `guide.html`, never affecting
+  the actual run's result above it. It sweeps player counts 1-4, calling
+  `runOptimizer()` **twice** per size: once with `elite` forced to `'no'`
+  (the original "No Elite" column, unchanged since 2026-08-04 —
+  regardless of the real run's setting, since Elite Challenge completion
+  is never guaranteed and shouldn't by itself skew which crew size looks
+  best, so Buyer's Choice never constrains this column's packing, just the
+  plain value-max pack), and once with `elite` forced to `'yes'` (the new
+  "With Elite" column — user request: some crews still go for the Elite
+  Challenge's bonus even though it's deliberately excluded from Career
+  Progress, so whether the crew's actual Buyer's Choice marks still all
+  fit at a given crew size matters to them too). Both columns report
+  `secondaryShareEach` only (not the host's full payout with
+  primary/bonuses) — precedented by `internal/kch_calculator_8.2.26.py`'s
+  own solo/duo/trio/quad payout comparison, which computes the analogous
+  "best secondary take" config. The With-Elite column is deliberately the
+  *same* raw metric, not a fuller number with bonus dollars folded in —
+  forcing Buyer's Choice items into packing can only match or reduce the
+  raw share (never increase it), so the two columns stay directly
+  comparable at a glance, and the bonus itself is presented as the
+  separate reward for that trade-off rather than baked into this number
+  (same reasoning `computeGuidePayout()` already applies to the Elite
+  bonus). Each column highlights its own "best" crew size independently,
+  since forcing Buyer's Choice in at one size can shift which size wins
+  for that column without moving the other. Crew size still changes item
+  *eligibility*, not just how a fixed total splits — Crisp Gallery items
+  require `minPlayers: 2`, so a smaller crew's lower share can genuinely
+  mean fewer reachable items, not just a bigger total split more ways;
+  `guide.html`'s panel says this explicitly rather than leaving it to be
+  inferred from the numbers alone.
 - **Buyer's Choice *packing* is conditional on Elite Challenge, and needs
   at least 2 picks — but the Buyer's Request *bonus* is not conditional on
   Elite (decoupled 2026-08-07, see below).** Marking up to three items as

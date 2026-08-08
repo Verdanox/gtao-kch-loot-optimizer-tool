@@ -546,23 +546,51 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
 // every supported crew size (1-4), to answer "would a different crew size
 // pay more per player?" (2026-08-04, user request — precedented by
 // `internal/kch_calculator_8.2.26.py`'s own solo/duo/trio/quad payout
-// comparison). Deliberately ignores Elite Challenge/Buyer's Choice
-// entirely — every call forces `elite: 'no'`, regardless of what the
-// actual run has it set to, since Elite completion is never guaranteed and
-// shouldn't skew a "which crew size is best" comparison. This also means
-// Buyer's Choice tags never constrain packing here; every crew size gets
-// the same pure value-max pack `runOptimizer()` already does when Elite is
-// off. Crew size still changes which items are even ELIGIBLE (Crisp
-// Gallery items require `minPlayers: 2`) — `runOptimizer`'s own `eligible`
-// filter already handles that per player count, so a smaller crew's lower
-// share here can genuinely mean "fewer items were reachable," not just "a
-// bigger total got split more ways." Reuses `runOptimizer()` as-is; no new
-// packing logic.
+// comparison). The "without Elite" column (`secondaryShareEach`/
+// `secondaryBagValue`, unchanged since 2026-08-04) forces `elite: 'no'`
+// regardless of what the actual run has it set to, since Elite completion
+// is never guaranteed and shouldn't by itself skew a "which crew size is
+// best" comparison — every crew size gets the same pure value-max pack
+// `runOptimizer()` already does when Elite is off, Buyer's Choice tags
+// completely ignored.
+//
+// A second "with Elite" column (`secondaryShareEachWithElite`/
+// `secondaryBagValueWithElite`, added 2026-08-07) forces `elite: 'yes'`
+// instead, keeping the run's actual Buyer's Choice marks — user request:
+// some crews still go for the Elite Challenge's Hard-mode bonus
+// (+$100k/player) even though it's deliberately excluded from Career
+// Progress, so which crew size still lets those marked items all fit
+// matters to them too. This column deliberately reports the same *raw*
+// secondary share metric as the other column, not a fuller payout with
+// bonus dollars folded in — forcing Buyer's Choice items into packing can
+// only match or reduce the raw share (never increase it), so the two
+// columns are directly comparable at a glance; the bonus itself is the
+// separate reward for accepting that trade-off, not something this panel
+// projects (same reasoning `computeGuidePayout()` already applies to the
+// Elite bonus). Reuses `runOptimizer()` as-is for both columns; no new
+// packing logic — its existing >=2-picks and unreachable-item handling
+// apply per crew size exactly as they would on a real run, including
+// falling back to the unconstrained pack (matching the "without" column)
+// whenever Elite can't actually be attempted or the marked items can't
+// all be bin-packed at that size.
+//
+// Crew size still changes which items are even ELIGIBLE (Crisp Gallery
+// items require `minPlayers: 2`) — `runOptimizer`'s own `eligible` filter
+// already handles that per player count, so a smaller crew's lower share
+// here can genuinely mean "fewer items were reachable," not just "a
+// bigger total got split more ways." This applies to both columns.
 export function compareCrewSizes(state, catalog, bagCapacityPerPlayer, bonusConstants) {
   const results = [];
   for (let players = 1; players <= 4; players++) {
-    const r = runOptimizer({ ...state, players, elite: 'no' }, catalog, bagCapacityPerPlayer, bonusConstants);
-    results.push({ players, secondaryBagValue: r.secondaryBagValue, secondaryShareEach: r.secondaryShareEach });
+    const withoutElite = runOptimizer({ ...state, players, elite: 'no' }, catalog, bagCapacityPerPlayer, bonusConstants);
+    const withElite = runOptimizer({ ...state, players, elite: 'yes' }, catalog, bagCapacityPerPlayer, bonusConstants);
+    results.push({
+      players,
+      secondaryBagValue: withoutElite.secondaryBagValue,
+      secondaryShareEach: withoutElite.secondaryShareEach,
+      secondaryBagValueWithElite: withElite.secondaryBagValue,
+      secondaryShareEachWithElite: withElite.secondaryShareEach
+    });
   }
   return results;
 }
