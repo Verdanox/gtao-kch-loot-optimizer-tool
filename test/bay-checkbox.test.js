@@ -14,7 +14,7 @@ test('catalog declares BAY as a data-driven checkbox item, not a hardcoded speci
   const bay = itemById(catalog, 'BAY');
   assert.ok(bay, 'BAY must exist in the catalog');
   assert.equal(bay.valueType, 'checkbox');
-  assert.equal(bay.fixedValue, 110000);
+  assert.equal(bay.fixedValue, 105000);
 });
 
 function stateWithLootOverrides(overrides, players = 1) {
@@ -44,21 +44,21 @@ test('unchecked BAY (blank value) is excluded entirely, even when marked Buyer\'
   assert.equal(r.secondaryBagValue, 0);
 });
 
-test('checked BAY participates at exactly $110,000 — no other value path reachable', () => {
+test('checked BAY participates at exactly $105,000 — no other value path reachable', () => {
   const bay = itemById(catalog, 'BAY');
   const state = stateWithLootOverrides({
     'BAY': { value: bay.fixedValue, buyersChoice: false }
   }, 1);
   const r = runOptimizer(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
   assert.ok(r.chosenIds.has('BAY'));
-  assert.equal(r.secondaryBagValue, 110000);
+  assert.equal(r.secondaryBagValue, 105000);
 
   // Confirm it landed in a bag at exactly the fixed value — no drift, no
   // arbitrary user-typed value ever reaches the model for this item.
   const bag = r.bags[0];
   const bayInBag = bag.items.find(it => it.itemId === 'BAY');
   assert.ok(bayInBag);
-  assert.equal(bayInBag.value, 110000);
+  assert.equal(bayInBag.value, 105000);
 });
 
 test('checked BAY as the ONLY Buyer\'s Choice pick does not earn the Elite bonus (needs 2+)', () => {
