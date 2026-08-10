@@ -353,8 +353,28 @@ confirmation dialog on unlock.
   the host just sequences it before or after the Vault trip rather than
   combining them. (`Vault` is excluded from *this* tier for a different
   reason than Loading Bay — see tier 0 above, which now actively routes it
-  away from the host instead of leaving it neutral.) (2) otherwise, prefer
-  a bin that already contains an item on the same floor (general
+  away from the host instead of leaving it neutral.)
+  **Real bug fix, 2026-08-09:** `packBins()` used to walk items strictly in
+  catalog order (`Vault → Loading Bay → Alarm Floor → First → Second →
+  Crisp Gallery`), so tier 1 only ever got a chance to fire once a
+  Second/Crisp Gallery item's turn came up — it had no way to reserve host
+  capacity ahead of time. A real 3-player run reported the host ending up
+  with a cross-floor mishmash (Alarm Floor + First + only two of four
+  scoped Second items) while a teammate got the Second/Crisp-Gallery-heavy
+  bag that was supposed to be the host's: an early, low-priority item
+  (Alarm Floor, processed first purely because tier 4/5's fallback still
+  defaults perfectly-tied bins to bin 0) claimed the host bag, and tiers
+  2/3's floor/adjacency clustering then snowballed more of that same floor
+  into it before any Second/Crisp Gallery item was ever reached. Fixed by
+  having `packBins()` walk every `HOST_PRIORITY_FLOORS` item ahead of every
+  other floor, regardless of catalog position or mandatory/optional status
+  — catalog order (the `order` field) remains the tiebreak *within* each
+  priority bucket, so this is exactly as Elite-toggle-independent as
+  before. Reordering only changes which of several equally-optimal bin
+  partitions gets realized (the DP's optimal total value is provably
+  invariant to processing order for a fixed set of symmetric bins) — it
+  never changes total secondary value or which items get selected.
+  (2) otherwise, prefer a bin that already contains an item on the same floor (general
   floor-clustering, so a crew spends less time running between floors);
   (3) otherwise, prefer a bin that already contains an item on an
   *adjacent* floor per the real Kortz Center map (`Alarm Floor`↔`First`,

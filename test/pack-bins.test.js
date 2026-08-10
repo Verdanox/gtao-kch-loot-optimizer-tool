@@ -170,15 +170,49 @@ test('Crisp Gallery items prefer the host bin even when least-loaded would pick 
 });
 
 test('Crisp Gallery preference falls through gracefully when the host bin truly has no room', () => {
-  // Filler is 'First', not 'Vault' — a Vault filler would itself get
-  // routed away from bin 0 by tier 0 (2026-08-07), which would leave the
-  // host bin free and defeat the point of this test (host bin truly full).
-  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'First' }]; // fills bin 0 completely
+  // Filler must itself be a HOST_PRIORITY_FLOORS item and processed first
+  // to genuinely fill bin 0 before G is ever considered (2026-08-09: since
+  // priority-floor items are now always walked ahead of every other floor,
+  // a 'First'-floor filler would no longer get a head start on claiming
+  // bin 0 first — G would just claim it instead, defeating the point of
+  // this test). Using 'Second' here fills the host bin via the same tier 1
+  // rule G itself relies on, so this is still a fair "host bin truly full"
+  // setup. Filler is also NOT 'Vault' — a Vault filler would get routed
+  // away from bin 0 by tier 0 (2026-08-07), which would leave the host bin
+  // free and defeat the point of this test.
+  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'Second' }]; // fills bin 0 completely
   const optional = [{ id: 'G', value: 50, weightUnits: 10, floor: 'Crisp Gallery' }];
   const result = packBins(mandatory, optional, 2, 100);
   assert.ok(result);
   assert.equal(result.value, 1050, 'the Crisp Gallery item should still be packed, just not with the host');
   assert.ok(result.bags[1].items.some(i => i.id === 'G'), 'Crisp Gallery item should fall through to a non-host bin, not be dropped');
+});
+
+// Regression coverage for the real 2026-08-09 bug report: a host bag full
+// of a cross-floor mishmash (Alarm Floor + First + partial Second) instead
+// of the documented Second/Crisp Gallery concentration. Root cause: tier 1
+// only fired when a priority-floor item happened to be walked in catalog
+// order (Vault -> Loading Bay -> Alarm Floor -> First -> Second -> Crisp
+// Gallery); an earlier, non-priority item could claim bin 0 first via the
+// tier 4/5 symmetric-tie default, then floor/adjacency clustering (tiers
+// 2/3) snowballed more of that same low-priority floor into the host bag
+// before any Second/Crisp Gallery item was ever reached. Fixed by walking
+// HOST_PRIORITY_FLOORS items ahead of every other floor regardless of
+// catalog `order`.
+test('a later-catalog-order priority-floor item still claims the host bag ahead of an earlier-catalog-order non-priority item', () => {
+  // 'Alarm Floor' (not 'First') for F: First is adjacent to Second, which
+  // would let F legitimately tier-3-cluster into whatever bin S landed in
+  // — using a floor with no adjacency to Second isolates this test to the
+  // priority-reordering behavior alone.
+  const optional = [
+    { id: 'F', value: 50, weightUnits: 30, floor: 'Alarm Floor', order: 0 }, // earlier catalog position, non-priority
+    { id: 'S', value: 50, weightUnits: 30, floor: 'Second', order: 1 },      // later catalog position, priority floor
+  ];
+  const result = packBins([], optional, 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.equal(bagOf('S'), 0, 'the Second-floor item should claim the host bag despite its later catalog order');
+  assert.notEqual(bagOf('F'), 0, 'the earlier-catalog Alarm Floor item should not have squatted in the host bag first');
 });
 
 // Regression coverage for the 2026-08-04 widening: the host must physically
@@ -291,8 +325,14 @@ test('isolated floors (Vault, Loading Bay) never soft-cluster with anything', ()
 });
 
 test('adjacent-floor preference falls through gracefully when the only adjacent bin has no room', () => {
-  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'First' }]; // fills bin 0 completely
-  const optional = [{ id: 'B', value: 50, weightUnits: 10, floor: 'Second' }];
+  // Filler ('Alarm Floor') and the incoming item ('First') are both
+  // deliberately NOT HOST_PRIORITY_FLOORS (2026-08-09: those are now
+  // walked ahead of every other floor, so using 'Second' here — as this
+  // test originally did — would let B claim bin 0 via tier 1 before A
+  // ever gets a chance to fill it, defeating the point of this test,
+  // which is specifically about tier 3's adjacency fallback).
+  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'Alarm Floor' }]; // fills bin 0 completely
+  const optional = [{ id: 'B', value: 50, weightUnits: 10, floor: 'First' }];
   const result = packBins(mandatory, optional, 2, 100);
   assert.ok(result);
   assert.equal(result.value, 1050, 'the adjacency preference should still pack B, just not with the full bin');
