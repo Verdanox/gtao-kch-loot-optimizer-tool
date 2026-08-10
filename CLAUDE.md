@@ -47,7 +47,7 @@ Both pages are `type="module"` and `import` directly from `js/kch-model.js`
   bag-space math is the tool's job, not theirs.
   - **Exception: the Delivery Truck Crate (`BAY`)** renders as a checkbox,
     not a number input, driven by `valueType: "checkbox"` and
-    `fixedValue: 110000` on its catalog entry (data-driven, not a
+    `fixedValue: 105000` on its catalog entry (data-driven, not a
     hardcoded `itemId === 'BAY'` check in the JS). Checked locks its value
     to `fixedValue`; unchecked excludes it entirely, even if it's also
     marked Buyer's Choice. This is the one deliberate exception to "every
@@ -55,8 +55,10 @@ Both pages are `type="module"` and `import` directly from `js/kch-model.js`
     actually taken during the heist. `fixedValue` was $122,500 (the
     $105k-140k community range, averaged) until 2026-08-03, when the user
     reported the truck's real value running lower than that average in
-    practice — it's now a deliberately pessimistic $110,000 for optimizer
-    math, and unlike the averaged figure before it, this number is
+    practice, dropping it to a deliberately pessimistic $110,000; on
+    2026-08-09 the user asked to go further and pin it to the floor of
+    that same $105k-140k range ($105,000) rather than just a
+    below-average estimate. This number is
     **never shown to the user on `index.html`**: the checkbox's own label
     just reads "Scoped", not a dollar amount, since it's a planning
     assumption rather than a confirmed real value worth anchoring on.
