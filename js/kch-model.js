@@ -206,6 +206,29 @@ function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 //      still land in the host's bag when capacity/ordering happens to
 //      put it there — that's fine, since the host just sequences it
 //      before or after the Vault trip rather than combining them.
+//      **Real bug fix, 2026-08-09:** this tier used to only fire at the
+//      moment a Second/Crisp Gallery item happened to be walked in
+//      catalog order (Vault → Loading Bay → Alarm Floor → First → Second
+//      → Crisp Gallery) — it had no way to reserve host capacity ahead of
+//      time. Since Alarm Floor/First are walked first, an early
+//      non-priority item could claim bin 0 via tier 4/5's symmetric-tie
+//      default (all bins tie on the very first item of a run, and that
+//      still resolves to bin 0), then tiers 2/3 would snowball more
+//      same-/adjacent-floor loot into that same bag before any
+//      Second/Crisp Gallery item was ever reached — a real report, host
+//      ended up with a cross-floor Alarm Floor+First+partial-Second
+//      mishmash while a teammate got the Second/Crisp-Gallery-heavy bag
+//      that was supposed to be the host's. Fixed by walking
+//      HOST_PRIORITY_FLOORS items ahead of every other floor in the
+//      items list itself (see the sort just below `items` is built),
+//      so tier 1 gets first claim on bin 0's capacity regardless of
+//      catalog position or mandatory/optional status — catalog `order`
+//      remains the tiebreak *within* each priority bucket, so this stays
+//      just as Elite-toggle-independent as before. Reordering can only
+//      ever change which of several equally-optimal bin partitions gets
+//      realized (solve()'s total value is provably invariant to
+//      processing order for a fixed set of symmetric bins) — never the
+//      total secondary value or which items get selected.
 //   2. Otherwise, prefer a bin that already contains an item sharing the
 //      same `.floor` — general floor-clustering, so a crew spends less
 //      time running between floors to collect their assigned loot.
@@ -283,7 +306,14 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
   // that never set it (every pre-existing test) get `0 - 0 = 0` throughout,
   // making this a no-op — current mandatory-first behavior is preserved
   // exactly when no caller opts in.
-  items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  //
+  // 2026-08-09: HOST_PRIORITY_FLOORS items are additionally walked ahead
+  // of every other floor (a primary sort key layered on top of the
+  // `order` tiebreak above) — see tier 1's doc comment above for the real
+  // bug this fixes. `order` still decides sequence *within* each priority
+  // bucket, so this stays just as toggle-independent as the fix above.
+  const priorityRank = (it) => HOST_PRIORITY_FLOORS.has(it.floor) ? 0 : 1;
+  items.sort((a, b) => (priorityRank(a) - priorityRank(b)) || ((a.order ?? 0) - (b.order ?? 0)));
 
   const NEG = -Infinity;
   const memo = new Map();
