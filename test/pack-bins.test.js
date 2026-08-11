@@ -170,18 +170,18 @@ test('Crisp Gallery items prefer the host bin even when least-loaded would pick 
 });
 
 test('Crisp Gallery preference falls through gracefully when the host bin truly has no room', () => {
-  // Filler must itself be a HOST_PRIORITY_FLOORS item and processed first
-  // to genuinely fill bin 0 before G is ever considered (2026-08-09: since
-  // priority-floor items are now always walked ahead of every other floor,
-  // a 'First'-floor filler would no longer get a head start on claiming
-  // bin 0 first — G would just claim it instead, defeating the point of
-  // this test). Using 'Second' here fills the host bin via the same tier 1
-  // rule G itself relies on, so this is still a fair "host bin truly full"
-  // setup. Filler is also NOT 'Vault' — a Vault filler would get routed
-  // away from bin 0 by tier 0 (2026-08-07), which would leave the host bin
-  // free and defeat the point of this test.
-  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'Second' }]; // fills bin 0 completely
-  const optional = [{ id: 'G', value: 50, weightUnits: 10, floor: 'Crisp Gallery' }];
+  // Filler must itself genuinely fill bin 0 before G is ever considered.
+  // 2026-08-09: priority-floor items are walked ahead of every other
+  // floor, so a 'First'-floor filler no longer gets a head start (G would
+  // just claim bin 0 first, defeating the point of this test). 2026-08-10:
+  // Crisp Gallery now also outranks Second *within* the priority bucket,
+  // so a 'Second' filler no longer gets a head start on G either — only
+  // an earlier-order Crisp Gallery item can genuinely fill bin 0 ahead of
+  // this one. Filler is also NOT 'Vault' — a Vault filler would get
+  // routed away from bin 0 by tier 0 (2026-08-07), which would leave the
+  // host bin free and defeat the point of this test.
+  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'Crisp Gallery', order: 0 }]; // fills bin 0 completely
+  const optional = [{ id: 'G', value: 50, weightUnits: 10, floor: 'Crisp Gallery', order: 1 }];
   const result = packBins(mandatory, optional, 2, 100);
   assert.ok(result);
   assert.equal(result.value, 1050, 'the Crisp Gallery item should still be packed, just not with the host');
@@ -228,6 +228,28 @@ test('Second-floor items now also prefer the host bin, same as Crisp Gallery', (
   assert.ok(result);
   assert.equal(result.value, 550, 'the Second-floor preference must not cost any value');
   assert.ok(result.bags[0].items.some(i => i.id === 'S'), 'Second-floor item should land with the host despite bin 0 having far less room than bin 1');
+});
+
+// Regression coverage for a real 2026-08-10 bug report: when combined
+// Second + Crisp Gallery weight overflows one host bag, a Second item
+// (earlier in catalog order, so walked first under the old plain-order
+// tiebreak within the priority bucket) claimed the host bag first,
+// leaving no room for a Crisp Gallery item that arrived later — backwards
+// from Crisp Gallery's stronger (EMP-desync) host-preference rationale
+// vs. Second's softer one. S(60) + G(50) = 110 can't both fit in one
+// 100-capacity bag, so exactly one of them must fall through — it must
+// be S, regardless of S having the earlier catalog `order`.
+test('Crisp Gallery outranks Second when both compete for the host bin', () => {
+  const optional = [
+    { id: 'S', value: 100, weightUnits: 60, floor: 'Second', order: 0 },
+    { id: 'G', value: 100, weightUnits: 50, floor: 'Crisp Gallery', order: 1 },
+  ];
+  const result = packBins([], optional, 2, 100);
+  assert.ok(result);
+  assert.equal(result.value, 200, 'both items still fit somewhere across the two bags — this is purely a routing preference');
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.equal(bagOf('G'), 0, 'Crisp Gallery should claim the host bag despite its later catalog order');
+  assert.notEqual(bagOf('S'), 0, 'Second should fall through to the non-host bag once Crisp Gallery has claimed the host\'s only available room');
 });
 
 test('Vault items exclude the host bag but still floor-cluster together via tier 2', () => {
