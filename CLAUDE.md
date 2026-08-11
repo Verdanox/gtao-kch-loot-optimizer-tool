@@ -11,7 +11,33 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   target, difficulty, weekly status, crew size, the full loot chart,
   Buyer's Choice picks, Elite Challenge toggle, optional per-player names.
   No live results panel — a single Submit button is the only way to reach
-  Page 2.
+  Page 2. A "Copy as CSV" button (2026-08-10, next to "Clear Board" in the
+  header actions bar) copies the current run's scoped item values to the
+  clipboard, since the user tracks values across runs over time in their
+  own external spreadsheet and had no way to preserve a scope-out before
+  clearing the board. One row per item that was actually scoped (blank
+  items skipped), in catalog order, three columns: Item, Floor, Value.
+  Floor is a real, load-bearing column, not decorative — two catalog
+  items share a name ("Oeuf de Coquard" on both Alarm Floor and Second;
+  "Fertility Statue" on both First and Crisp Gallery), so Item alone
+  can't disambiguate them if both are scoped in the same run; the user
+  chose a Floor column over renaming/suffixing the items themselves.
+  Value is a plain number (no `$`, no thousands separator) so a
+  spreadsheet treats it as numeric on paste, not text. The CSV-building
+  logic itself (`buildScopeCsv()`) lives in `js/kch-model.js`, not here —
+  same reason every other piece of shared logic does: it's pure
+  (filtering/ordering/escaping, no `document`/clipboard), so it gets real
+  `node --test` coverage against `fixtures/sample-run.json`
+  (`test/build-scope-csv.test.js`) instead of only being checkable by eye
+  in a browser. `index.html` only owns the actual
+  `navigator.clipboard.writeText()` call and the button's brief
+  "Copied!"/`var(--teal)` confirmation state (mirrors `guide.html`'s
+  `.lock-btn.locked` pattern), reverting after ~1.5s. Deliberately not
+  offered inside the "Clear the board?" confirm dialog too — header bar
+  only, the user's call, on the reasoning that Copy is a general-purpose
+  action rather than specifically a clear-time safety net. JSON export
+  (for a future clean re-import feature) was considered and explicitly
+  deferred — not a need right now.
 - `guide.html` — Page 2, Heist Guide. The results/manifest screen, meant to
   be screenshotted or printed during the run. Top-to-bottom: a glass-cutter
   prep reminder banner (if applicable), the security-door-combination field
@@ -261,7 +287,7 @@ styling lives in `css/kch-styles.css`, linked from all three.
 `localStorage` anywhere in it — holding `packBins()`, `knapsack()`,
 `assignItemsToBags()`, `calcPrimary()`, `bonusAmounts()`, `itemById()`,
 `runOptimizer()`, `computeGuidePayout()`, `computeCareerProgress()`,
-`packedPrepWarnings()`, `money()`, and the
+`packedPrepWarnings()`, `buildScopeCsv()`, `money()`, and the
 `serializeState`/`deserializeState`/`mergeLootByItemId`
 persistence helpers. Both pages and the Node test suite (`test/*.test.js`,
 run via `node --test`) import this same file, so there is exactly one
