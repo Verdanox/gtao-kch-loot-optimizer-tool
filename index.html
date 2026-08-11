@@ -15,6 +15,7 @@
     <p class="sub">Scope your secondary targets, set your crew and difficulty, then submit to generate your Heist Guide. Everything here autosaves as you go — refresh, close the browser, or come back later and it'll still be here.</p>
     <div class="header-actions">
       <button type="button" id="clearBtn" class="clear-btn">Clear Board</button>
+      <button type="button" id="copyCsvBtn" class="copy-btn">Copy as CSV</button>
       <button type="button" id="feedbackBtn" class="feedback-btn">Feedback</button>
     </div>
   </div>
@@ -124,6 +125,7 @@
 import {
   defaultPage1State, defaultPage2State,
   serializeState, deserializeState, mergeLootByItemId,
+  buildScopeCsv,
   STORAGE_KEY
 } from './js/kch-model.js';
 
@@ -214,6 +216,32 @@ function initClearControls(){
   });
   // Click on the backdrop (outside the dialog's own content box) cancels, same as Escape.
   dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+}
+
+// ---------- Copy as CSV (clipboard export of this run's scoped values) ----------
+// buildScopeCsv() itself lives in kch-model.js (pure, DOM-free, shares the
+// same catalog-order/valid-value conventions as the rest of the model) —
+// this is just the DOM-touching trigger + button feedback state.
+function initCopyCsvControls(){
+  const btn = document.getElementById('copyCsvBtn');
+  const defaultLabel = btn.textContent;
+  let revertTimer = null;
+  btn.addEventListener('click', async () => {
+    const csv = buildScopeCsv(state.loot, LOOT_CATALOG);
+    clearTimeout(revertTimer);
+    try {
+      await navigator.clipboard.writeText(csv);
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+    } catch (err) {
+      btn.textContent = 'Copy failed';
+      btn.classList.remove('copied');
+    }
+    revertTimer = setTimeout(() => {
+      btn.textContent = defaultLabel;
+      btn.classList.remove('copied');
+    }, 1500);
+  });
 }
 
 function clearAll(){
@@ -477,6 +505,7 @@ async function init(){
     renderCrewHint();
     initSelects();
     initClearControls();
+    initCopyCsvControls();
     initFeedbackControls();
     renderAll();
   } catch (err) {
