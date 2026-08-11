@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kortz Center — Map View</title>
+<link rel="stylesheet" href="css/kch-styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <p class="eyebrow">Case File · Kortz Center Heist</p>
+    <h1>Map View</h1>
+    <p class="sub">Live reference for the run — who grabs what, and where. No totals, no payout math.</p>
+  </div>
+
+  <div class="warn-box" id="prepWarnBox" style="display:none; margin:0 0 16px;"></div>
+
+  <!-- SECURITY COMBO + LOCK — identical markup/IDs to guide.html; both
+       pages read/write the same page2State fields through the shared
+       localStorage blob, so an edit here shows up there too. -->
+  <div class="step">
+    <span class="step-num">§</span><span class="step-title">Security Door Combination</span>
+    <div class="step-body">
+      <label class="field-label">Deactivation combo (from the prep mission)</label>
+      <div class="combo-row">
+        <input type="text" id="securityCombo" placeholder="Not known yet — fill in after prep">
+        <button type="button" id="comboLockBtn" class="lock-btn">Lock</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <span class="step-num">§</span><span class="step-title">Who Grabs What</span>
+    <div class="step-body" id="itemsList"></div>
+  </div>
+
+  <!-- FLOOR MAPS — deliberately last: floors with no tagged coordinates
+       yet simply add nothing here (the list above is already the complete
+       fallback), and crews who don't need the spatial view just stop
+       scrolling once they have their list. See renderFloorMaps(). -->
+  <div class="step" id="floorMapsStep" style="display:none;">
+    <span class="step-num">§</span><span class="step-title">Floor Maps</span>
+    <div class="step-body" id="floorMapsList"></div>
+  </div>
+
+  <div class="no-print" style="text-align:center; margin-top:20px;">
+    <a href="guide.html" class="back-link">← Back to Guide</a>
+  </div>
+
+</div>
+
+<script type="module">
+import {
+  itemById, money, runOptimizer, packedPrepWarnings,
+  defaultPage1State, defaultPage2State, serializeState, deserializeState, mergeLootByItemId,
+  DEFAULT_BONUS_CONSTANTS, STORAGE_KEY
+} from './js/kch-model.js';
+
+// Prep slug -> display label. Duplicated from guide.html — see CLAUDE.md's
+// "map-view.html" note on why this page duplicates guide.html's
+// presentation helpers rather than sharing a module.
+const PREP_LABELS = { 'glass-cutter': 'Glass Cutter' };
+function prepLabel(slug) { return PREP_LABELS[slug] || slug; }
+
+// ---------- DATA ----------
+let LOOT_CATALOG = [];
+let BAG_CAPACITY_PER_PLAYER = 100;
+// Floor name -> map asset path. Many-to-one (Second and Crisp Gallery are
+// slated to share one image) — see renderFloorMaps() below, which groups
+// by resolved asset, not floor name, because of this.
+let FLOOR_MAPS = {};
+
+// Floor -> slug lookup for the floor-color accent below. Presentation-only
+// concern (kch-model.js stays pure logic, no display mapping) — reuses the
+// exact slugs already reserved in internal/requirements.md for the
+// per-floor map assets (assets/floors/<slug>.png).
+const FLOOR_SLUGS = {
+  'Vault': 'vault',
+  'Loading Bay': 'loading-bay',
+  'Alarm Floor': 'alarm-floor',
+  'First': 'first',
+  'Second': 'second',
+  'Crisp Gallery': 'crisp-gallery'
+};
+function floorSlug(floor) {
+  return FLOOR_SLUGS[floor] || floor.toLowerCase().replace(/\s+/g, '-');
+}
+
+// ---------- STATE (hydrated from localStorage) ----------
+let state = null;
+let page2State = null;
+
+function loadPersisted(){
+  const defaults1 = defaultPage1State(LOOT_CATALOG);
+  const defaults2 = defaultPage2State();
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const { page1, page2 } = deserializeState(raw, defaults1, defaults2);
+  state = { ...page1, loot: mergeLootByItemId(LOOT_CATALOG, page1.loot) };
+  page2State = page2;
+}
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState(state, page2State)));
+}
+
+// The optional per-run sub-type the player picked on page 1 (only the
+// Crisp Gallery gemstone offers one today — see `variants` in
+// secondary-loot.json). It lives on state.loot, not on the packed bag
+// items, since it's purely descriptive and never reaches the optimizer.
+function variantFor(itemId){
+  const entry = state.loot.find(l => l.itemId === itemId);
+  return entry && entry.variant ? entry.variant : '';
+}
+
+function playerLabel(i){
+  const name = (state.playerNames && state.playerNames[i]) ? state.playerNames[i].trim() : '';
+  const base = i === 0 ? 'Host (P1)' : `Player ${i + 1}`;
+  return name ? `${name} — ${base}` : base;
+}
+
+// Abbreviated form ("P1"/"P2"/...) used only in the Floor Maps legend
+// (2026-08-07, real UX finding: a genuinely long player name still
+// truncated there even with the ellipsis/max-width handling already in
+// place, since "Player 2" alone ate 8 of the label's limited characters).
+// Dropping "Host"/"Player" entirely — uniform "P1"-style labels for every
+// slot, including the host — buys back that room without changing what
+// the label conveys: the legend's only job is mapping a color to a name,
+// and "Host" is already established elsewhere (Who Grabs What, the
+// Loading Bay callout) via playerLabel() above, which is untouched.
+function playerShortLabel(i){
+  const name = (state.playerNames && state.playerNames[i]) ? state.playerNames[i].trim() : '';
+  const base = `P${i + 1}`;
+  return name ? `${name} — ${base}` : base;
+}
+
+// Reminder-only banner (not gating): warns if any *packed* item needs a
+// prep mission the optimizer has no way to know was actually done. Names
+// only the specific items present this run, not a generic catch-all.
+function renderPrepWarning(r){
+  const box = document.getElementById('prepWarnBox');
+  const flagged = packedPrepWarnings(LOOT_CATALOG, r.chosenIds);
+  if (flagged.length === 0){
+    box.style.display = 'none';
+    return;
+  }
+  const names = flagged.map(cat => cat.name).join(', ');
+  const label = prepLabel(flagged[0].requiresPreps[0]);
+  box.style.display = 'block';
+  box.textContent = `Heads up: your optimized loot includes items that need the ${label} prep — make sure it's done before this run: ${names}`;
+}
+
+// ---------- RENDER: "Who Grabs What" — items only, floor color-coded ----------
+function renderItemsList(r){
+  const container = document.getElementById('itemsList');
+  container.innerHTML = '';
+
+  for (let i = 0; i < state.players; i++){
+    const bag = r.bags[i];
+    const card = document.createElement('div');
+    card.className = `player-card p-color-${i}`;
+
+    const head = document.createElement('p');
+    head.className = 'player-card-head';
+    head.innerHTML = `<span class="dot"></span><span>${playerLabel(i)}</span>`;
+    card.appendChild(head);
+
+    if (bag.items.length === 0){
+      const empty = document.createElement('p');
+      empty.className = 'manifest-empty';
+      empty.textContent = 'No items in this bag.';
+      card.appendChild(empty);
+    } else {
+      const floorOrder = [...new Set(LOOT_CATALOG.map(it => it.floor))];
+      floorOrder.forEach(floor => {
+        const floorItems = bag.items.filter(it => itemById(LOOT_CATALOG, it.itemId).floor === floor);
+        if (floorItems.length === 0) return;
+
+        const floorHeading = document.createElement('p');
+        floorHeading.className = 'loot-floor-heading';
+        floorHeading.textContent = floor;
+        card.appendChild(floorHeading);
+
+        floorItems.forEach(it => {
+          const cat = itemById(LOOT_CATALOG, it.itemId);
+          const isBC = r.bcIdsSet.has(it.itemId);
+          const div = document.createElement('div');
+          div.className = 'manifest-item';
+          div.dataset.floor = floorSlug(floor);
+          const variant = variantFor(it.itemId);
+          const detailHtml = variant
+            ? ` <span class="item-variant">— ${variant}</span>`
+            : (cat.description ? ` <span class="item-desc">— ${cat.description}</span>` : '');
+          div.innerHTML = `<span class="name">${cat.name}${detailHtml}${isBC ? '<span class="flag">BUYER\'S CHOICE</span>' : ''}</span><span class="val">${money(it.value)}</span>`;
+          card.appendChild(div);
+        });
+      });
+    }
+
+    container.appendChild(card);
+  }
+
+  if (r.ineligibleCount > 0){
+    const note = document.createElement('p');
+    note.className = 'hint';
+    note.style.marginTop = '10px';
+    note.textContent = `${r.ineligibleCount} item(s) excluded — they need more players than your current crew size.`;
+    container.appendChild(note);
+  }
+}
+
+// ---------- RENDER: "Floor Maps" — pins for packed items, grouped by map asset ----------
+// Only items that are BOTH packed this run AND have real xPct/yPct get a
+// pin; a floor with no floorMaps entry (or an item with no coordinates
+// yet) is silently skipped, not an error — this is how the section stays
+// a no-op today for every floor except Alarm Floor, and picks up new
+// floors automatically as they get tagged.
+function renderFloorMaps(r){
+  const step = document.getElementById('floorMapsStep');
+  const container = document.getElementById('floorMapsList');
+  container.innerHTML = '';
+
+  // Keyed by resolved asset path, not floor name — Second and Crisp
+  // Gallery share one image, so their pins belong on one shared card, not
+  // two near-duplicate ones.
+  const groups = new Map();
+  // Loading Bay is deliberately excluded from floorMaps entirely (a single
+  // item, nothing to visually distinguish — see data/secondary-loot.json's
+  // _notes) — never adjacent to Vault either (see CLAUDE.md's floor
+  // adjacency notes), so a callout baked onto another floor's map would
+  // misrepresent the routing. Checked by floor, not itemId === 'BAY', same
+  // "data-driven, not hardcoded" convention used everywhere else BAY shows
+  // up in this app. loadingBayPlayerIndex feeds the callout's player dot
+  // below — BAY is a single item, so there's at most one carrier.
+  let loadingBayPacked = false;
+  let loadingBayPlayerIndex = -1;
+  for (let i = 0; i < state.players; i++){
+    const bag = r.bags[i];
+    bag.items.forEach(it => {
+      const cat = itemById(LOOT_CATALOG, it.itemId);
+      if (cat.floor === 'Loading Bay'){ loadingBayPacked = true; loadingBayPlayerIndex = i; }
+      const asset = FLOOR_MAPS[cat.floor];
+      if (!asset || cat.xPct == null || cat.yPct == null) return;
+      if (!groups.has(asset)) groups.set(asset, { floors: new Set(), pins: [] });
+      const g = groups.get(asset);
+      g.floors.add(cat.floor);
+      g.pins.push({ cat, playerIndex: i, itemId: it.itemId });
+    });
+  }
+
+  if (groups.size === 0 && !loadingBayPacked){
+    step.style.display = 'none';
+    return;
+  }
+  step.style.display = '';
+
+  // Loading Bay's callout goes FIRST, ahead of every real map — it has no
+  // map to show, but leaving it out of this section entirely (or tucked
+  // at the bottom, past everything else) reads as an afterthought rather
+  // than the deliberate choice it is. Same floor-map-card heading+content
+  // rhythm as the real cards below, just without an <img>, plus a
+  // floor-color border and a player-color dot standing in for a pin.
+  if (loadingBayPacked){
+    const card = document.createElement('div');
+    card.className = 'floor-map-card loading-bay-card';
+
+    const heading = document.createElement('p');
+    heading.className = 'loot-floor-heading';
+    heading.textContent = 'Loading Bay';
+    card.appendChild(heading);
+
+    const note = document.createElement('p');
+    note.className = 'hint';
+    const dot = document.createElement('span');
+    dot.className = `mini-dot p-color-${loadingBayPlayerIndex}`;
+    note.appendChild(dot);
+    // Names the carrier inline, same as a real map card's legend does for
+    // its dots — this card should read correctly on its own (the
+    // screenshot-sharing reasoning behind every color signal in this
+    // section), not send you back to "Who Grabs What" to decode the dot.
+    note.appendChild(document.createTextNode(`${playerLabel(loadingBayPlayerIndex)} — no map for this floor, nothing to pinpoint beyond the truck itself. The Delivery Truck Crate is in the back of the truck.`));
+    card.appendChild(note);
+
+    container.appendChild(card);
+  }
+
+  // Real map cards render in catalog floor order (Vault -> Loading Bay ->
+  // Alarm Floor -> First -> Second -> Crisp Gallery), the same
+  // `floorOrder` technique renderItemsList() already uses for its
+  // per-player floor sub-headings — the catalog's own item order already
+  // encodes the intended building sequence. Without this, card order was
+  // just whatever floor happened to get walked first while assigning
+  // bags, which is why "Level 2" could appear before Alarm Floor/First.
+  const floorOrder = [...new Set(LOOT_CATALOG.map(it => it.floor))];
+  const sortedGroups = [...groups.entries()].sort((a, b) => {
+    const aIdx = Math.min(...[...a[1].floors].map(f => floorOrder.indexOf(f)));
+    const bIdx = Math.min(...[...b[1].floors].map(f => floorOrder.indexOf(f)));
+    return aIdx - bIdx;
+  });
+
+  sortedGroups.forEach(([asset, g]) => {
+    const floorNames = [...g.floors].join(' / ');
+
+    const card = document.createElement('div');
+    card.className = 'floor-map-card';
+
+    const heading = document.createElement('p');
+    heading.className = 'loot-floor-heading';
+    heading.textContent = floorNames;
+    card.appendChild(heading);
+
+    // Player-color legend, dynamically sized to this run's actual crew —
+    // never baked into the map art (see CSS comment on .map-legend for
+    // why) — repeated on every card, not once for the page, so a
+    // screenshot of just this card still reads correctly on its own.
+    const legend = document.createElement('div');
+    legend.className = 'map-legend';
+    for (let i = 0; i < state.players; i++){
+      const item = document.createElement('span');
+      item.className = 'map-legend-item';
+      const dot = document.createElement('span');
+      dot.className = `mini-dot p-color-${i}`;
+      item.appendChild(dot);
+      // A custom player name (index.html's optional per-player name field)
+      // has no length limit — wrapped in its own span, not a bare text
+      // node, so a pathologically long one truncates with an ellipsis
+      // (see .map-legend-label CSS) instead of overflowing the card or
+      // forcing a horizontal scrollbar on the page.
+      const label = document.createElement('span');
+      label.className = 'map-legend-label';
+      label.textContent = playerShortLabel(i);
+      label.title = playerLabel(i);
+      item.appendChild(label);
+      legend.appendChild(item);
+    }
+    card.appendChild(legend);
+
+    const mapWrap = document.createElement('div');
+    mapWrap.className = 'floor-map';
+    const img = document.createElement('img');
+    img.src = asset;
+    img.alt = `${floorNames} layout`;
+    img.loading = 'lazy';
+    mapWrap.appendChild(img);
+
+    g.pins.forEach(({ cat, playerIndex, itemId }) => {
+      const pin = document.createElement('div');
+      pin.className = `map-pin p-color-${playerIndex}`;
+      pin.style.left = `${cat.xPct}%`;
+      pin.style.top = `${cat.yPct}%`;
+      pin.textContent = itemId.replace('-', '');
+      const label = `${cat.name} — ${playerLabel(playerIndex)}`;
+      pin.title = label;
+      pin.setAttribute('aria-label', label);
+      mapWrap.appendChild(pin);
+    });
+
+    card.appendChild(mapWrap);
+    container.appendChild(card);
+  });
+}
+
+function renderMapView(){
+  const r = runOptimizer(state, LOOT_CATALOG, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  renderPrepWarning(r);
+  renderItemsList(r);
+  renderFloorMaps(r);
+}
+
+function wireSecurityCombo(){
+  const input = document.getElementById('securityCombo');
+  const lockBtn = document.getElementById('comboLockBtn');
+
+  function syncLockUI(){
+    input.readOnly = !!page2State.locked;
+    lockBtn.textContent = page2State.locked ? 'Unlock to edit' : 'Lock';
+    lockBtn.classList.toggle('locked', !!page2State.locked);
+  }
+
+  input.value = page2State.securityCombo || '';
+  syncLockUI();
+
+  input.addEventListener('input', e => {
+    page2State.securityCombo = e.target.value;
+    saveState();
+  });
+  lockBtn.addEventListener('click', () => {
+    // Reversible fat-finger guard, not a security boundary — no confirm
+    // dialog. readonly (not disabled) keeps the field selectable/copyable
+    // and in the tab order while locked.
+    page2State.locked = !page2State.locked;
+    syncLockUI();
+    saveState();
+  });
+}
+
+async function init(){
+  try {
+    const lootRes = await fetch('data/secondary-loot.json');
+    const lootData = await lootRes.json();
+
+    LOOT_CATALOG = lootData.items;
+    BAG_CAPACITY_PER_PLAYER = lootData.bagCapacityPerPlayer;
+    FLOOR_MAPS = lootData.floorMaps || {};
+
+    loadPersisted();
+
+    wireSecurityCombo();
+    renderMapView();
+  } catch (err) {
+    document.getElementById('itemsList').innerHTML =
+      `<p class="hint" style="color:var(--warn);">Failed to load loot data (${err.message}). Serve this folder over HTTP (not file://) and reload.</p>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

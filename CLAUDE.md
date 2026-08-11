@@ -5,7 +5,7 @@ loadout for the GTA Online Kortz Center Heist, given crew size, difficulty,
 weekly status, and Buyer's Choice picks.
 
 ## Pages
-Two static pages, real navigation via `location.href`, state handed off
+Three static pages, real navigation via `location.href`, state handed off
 entirely through `localStorage` (no view-swap, no SPA framework):
 - `index.html` — Page 1, Scope & Setup. Pure input collection: primary
   target, difficulty, weekly status, crew size, the full loot chart,
@@ -16,21 +16,148 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   be screenshotted or printed during the run. Top-to-bottom: a glass-cutter
   prep reminder banner (if applicable), the security-door-combination field
   with a reversible lock control, the promoted "who grabs what" info
-  (optimized bag value + per-player item lists, color-coded by floor), then
-  the demoted "Finale Result" (Primary/Secondary totals + per-player
-  payout/bonus figures — no combined "Total Take" headline, see below;
-  each player's own card below it does show a per-player "Career
-  Progress" figure, distinct from "Payout").
-  These are genuinely separate render passes/DOM
+  (optimized bag value + per-player item lists, color-coded by floor), a
+  "Map View →" button (see `map-view.html` below), then the demoted
+  "Finale Result" (Primary/Secondary totals + per-player payout/bonus
+  figures — no combined "Total Take" headline, see below; each player's
+  own card below it does show a per-player "Career Progress" figure,
+  distinct from "Payout"). These are genuinely separate render passes/DOM
   zones, not just reordered markup — the item ledger and the payout figures
   used to be welded into the same per-player card. Has a "back to edit"
-  link back to `index.html`; both pages hydrate from the same
-  `localStorage` blob, so navigation either direction needs no extra
+  link back to `index.html`; every page hydrates from the same
+  `localStorage` blob, so navigation in any direction needs no extra
   state-passing.
+- `map-view.html` — Page 3, Map View, added 2026-08-06. A lean,
+  host-facing, screenshot/share-friendly live-reference for the *actual
+  run*, reached via the "Map View →" button on `guide.html` (sitting
+  between "Who Grabs What" and "Finale Result" — the seam between
+  operational and planning content) and a "← Back to Guide" link back.
+  **`guide.html` gates that button behind a `MAP_VIEW_ENABLED` constant**
+  (added 2026-08-10, near the top of its module script) — a deploy-time
+  kill switch: flip to `false` and redeploy to instantly hide the
+  gateway button/section without a git revert, in case the feature ships
+  with an issue post-launch. Deliberately only hides discoverability from
+  `guide.html` — it doesn't gate `map-view.html` itself, so a direct URL
+  still works while the flag is off; adding that would mean duplicating
+  the flag onto `map-view.html` too, which already deliberately duplicates
+  rather than shares render helpers with `guide.html` (see below), and
+  wasn't asked for. Chosen over a full git revert because the map feature
+  and any unrelated in-flight fix (e.g. to `js/kch-model.js`) live in
+  different files, so this flag can be flipped independently of whatever
+  else has landed since.
+  Exists because `guide.html` conflates two audiences that have nothing to
+  do with each other mid-heist: planning/bookkeeping (Finale Result,
+  Payout by Player, Career Progress, Crew Size Comparison — relevant
+  before a crew size is locked in, or after to settle up) and operational
+  reference (prep warnings, security combo, who-grabs-what, floor maps —
+  the only part that matters *during* the run). The host is the one who
+  fills out this tool and relays results to teammates (confirmed
+  2026-08-06), not each player individually — so this page is what a host
+  keeps pinned on a second screen or screenshots piece-by-piece into a
+  group chat, without financial math ever sharing the frame. Deliberately
+  contains, top to bottom: the prep warning banner, Security Door
+  Combination (identical markup/IDs to `guide.html` — editing/locking it
+  here updates the same `page2State` fields `guide.html` reads, via the
+  shared `localStorage` blob), Who Grabs What (shown exactly as on
+  `guide.html`, dollar values and Buyer's Choice flags included — not a
+  stripped-down variant), and Floor Maps (see below) — deliberately last,
+  since floors with no tagged coordinates yet contribute nothing there and
+  the list above is already the complete fallback, and crews who don't
+  need the spatial view (the user's phrase: "sweaty folks") just stop
+  scrolling once they have their list — no toggle/collapse mechanism
+  needed to make maps skippable. Deliberately excludes the Optimized Bags
+  $ stamp and its overflow/Buyer's-Choice-ineligible warning — the host
+  already sees that on `guide.html` itself before ever clicking through,
+  and it's planning-relevant, not moment-to-moment operational info.
+  **Duplicates rather than shares** `guide.html`'s `PREP_LABELS`/
+  `prepLabel`, `FLOOR_SLUGS`/`floorSlug`, `playerLabel()`, `variantFor()`,
+  `loadPersisted()`/`saveState()`, `renderPrepWarning()`,
+  `renderItemsList()`, and `wireSecurityCombo()` — checked the existing
+  precedent first: `index.html` and `guide.html` already each
+  independently duplicate their own persistence/hydration boilerplate,
+  and the only thing actually shared between pages today is
+  `js/kch-model.js` (pure logic). Introducing a shared render module for
+  one page would be a new pattern the rest of the app doesn't use, so this
+  stays consistent with how the app already works rather than DRY-ing it
+  up. Also skips fetching `data/primary-targets.json` entirely — nothing
+  on this page needs a primary-target value, so unlike the other two
+  pages it only fetches `data/secondary-loot.json`.
 
-Both pages are `type="module"` and `import` directly from `js/kch-model.js`
-(no separate `<script src>` tag for it). Shared visual styling lives in
-`css/kch-styles.css`, linked from both pages.
+Floor Maps itself (an image-based extension of "Who Grabs What," not a
+replacement) lives only on `map-view.html`: one card per floor-map asset,
+with a pin for every *packed* item that has real `xPct`/`yPct` data,
+colored by which player's bag it landed in (reusing the `p-color-0..3`
+player palette, same convention as the player cards above it). Cards are
+grouped by resolved map asset rather than `floor` name, since `floorMaps`
+is many-to-one — `Second` and `Crisp Gallery` share one image
+(`assets/floors/second.png`), and that shared image has a dashed-rectangle
+callout drawn directly in the art marking the Crisp Gallery room's
+boundary, in the app's own `--floor-crisp-gallery` blue. Every mappable
+floor is tagged as of 2026-08-06 (Alarm Floor, First, Vault, Second/Crisp
+Gallery). Pure presentation, same as `floorSlug()` — no `kch-model.js`
+logic involved. (This section briefly lived inline on `guide.html`
+itself — a real density test at First Floor's item count measured it at
+~2x the height of the entire existing "Who Grabs What" list, which is
+what prompted splitting `map-view.html` out in the first place.)
+
+**Cards render in catalog floor order** (fixed 2026-08-06), not the
+incidental order floors happened to get walked in while assigning bags
+(which is why "Level 2" could appear before Alarm Floor/First before this
+fix). Reuses the exact `[...new Set(LOOT_CATALOG.map(it => it.floor))]`
+technique `renderItemsList()` already uses for its per-player floor
+sub-headings — the catalog's own item order already encodes the intended
+building sequence (Vault → Loading Bay → Alarm Floor → First → Second →
+Crisp Gallery). A merged group (Second/Crisp Gallery) sorts by whichever
+of its floors appears first in that sequence.
+
+**Each map card carries its own player-color legend** (added 2026-08-06),
+dynamically generated and sized to the actual crew for that run — never
+baked into the base map art, the same "pins are data" principle the pins
+themselves already follow (a static legend can't adapt to crew size and
+would show unusable swatches for players not even in this run). Repeated
+on every card rather than shown once for the whole section, deliberately:
+the host screenshots individual floor cards to share with teammates, and
+each screenshot needs to read correctly on its own without the rest of
+the page for context. The legend's visible label uses `playerShortLabel()`
+(`"P1"`/`"P2"`/etc., 2026-08-07 UX-review fix), not `playerLabel()`'s
+fuller `"Host (P1)"`/`"Player N"` form used everywhere else — a real,
+genuinely long player name still overflowed the legend's ellipsis/
+max-width handling because "Player 2" alone ate 8 of the label's limited
+characters; dropping to a uniform `"PN"` (host included) buys back that
+room without losing any information the legend's color-to-name job
+actually needs. `label.title` still holds the full `playerLabel()` form,
+so hovering a legend entry reveals "Host"/"Player N" same as before —
+only the always-visible text is abbreviated.
+
+**Loading Bay gets a text-only callout card, not a map — and it sits
+first, ahead of every real map (moved there 2026-08-06).** It's the one
+floor deliberately excluded from `floorMaps` entirely (a single item, `BAY`,
+nothing to visually distinguish — see `data/secondary-loot.json`'s
+`_notes`). Once every *other* floor had a real map, leaving Loading Bay
+silently absent from the section (or buried at the bottom, past
+everything else) started reading as a gap rather than a choice, so
+`renderFloorMaps()` checks (by `floor === 'Loading Bay'`, not a hardcoded
+`itemId === 'BAY'` check) whether it was packed this run and, if so,
+renders it before any real map card — same `.floor-map-card`
+heading+content rhythm, just without an `<img>`. Carries the same two
+color signals a real card's pins would: a `--floor-loading-bay`
+left-border accent (matching how every other floor-colored element in the
+app already works — a border, not full-color text) and a player-color dot
+next to the text for whichever player actually has `BAY` this run,
+standing in for a pin — and (fixed 2026-08-06) names that player inline
+in the text itself, the same way a real card's legend names each of its
+dots, rather than pointing back to "Who Grabs What" to decode the color;
+this card should read correctly on its own, same screenshot-sharing
+reasoning as everything else in this section. Deliberately **not** baked
+onto the Vault map, despite the two floors
+sitting adjacent in the catalog — `Vault` and `Loading Bay` are documented
+as isolated from every other floor including each other (see the
+bag-assignment adjacency notes under "Core logic" below), so pinning a
+Loading Bay note onto Vault's art would misrepresent the routing.
+
+All three pages are `type="module"` and `import` directly from
+`js/kch-model.js` (no separate `<script src>` tag for it). Shared visual
+styling lives in `css/kch-styles.css`, linked from all three.
 
 ## Data model
 - `data/primary-targets.json` — primary painting payouts. Only a base value is
@@ -75,9 +202,21 @@ Both pages are `type="module"` and `import` directly from `js/kch-model.js`
   - **`variants` + `variantLabel` (currently only on `2-H`, Gemstone)** —
     an optional per-run sub-type picker. When a catalog entry carries a
     non-empty `variants` array, `index.html` renders a dropdown of those
-    values in the item's controls (after the value input, so the
-    documented "click row, Tab once → value input" order is unchanged),
-    and the pick is saved on the loot entry as `variant`. It is purely
+    values in the item's controls, built and appended **before** the value
+    input so the dropdown is first in real DOM order — visual order, DOM
+    order, and Tab order all agree: entering the row lands on the
+    dropdown first ("what is it, then what's it worth"), then the value
+    input, then Tab moves on to the next row. This is a real fix
+    (2026-08-06) for a genuine bug: an earlier version kept the dropdown
+    *second* in DOM order and used CSS (`order:-1`, then a `grid-column`
+    attempt) to make it appear first only visually, on the theory that
+    Tab would keep following DOM order regardless. Confirmed empirically
+    in-browser that neither theory held — Tab followed plain DOM order
+    both times, so a value-input-then-dropdown DOM order always put the
+    dropdown *after* the value input in Tab sequence too, sending Tab
+    backward into the dropdown before it would advance to the next row.
+    Reordering the actual DOM (not any CSS trick) was the only fix that
+    worked. The pick is saved on the loot entry as `variant`. It is purely
     descriptive: never an eligibility, weight, value, or packing input,
     and `runOptimizer()` never reads it. `guide.html` shows it in the
     "Who Grabs What" manifest **in place of** the item's `description` —
@@ -99,6 +238,23 @@ Both pages are `type="module"` and `import` directly from `js/kch-model.js`
     target (a `<label>` wrapping a visually-hidden checkbox, per-item
     `aria-label`) — not just a small checkbox — while the value input (and
     BAY's own checkbox) remain independently clickable/typeable inside it.
+  - **`floorMaps` (top-level, not per-item) + per-item `xPct`/`yPct`** —
+    data backing `map-view.html`'s "Floor Maps" section (see "Pages"
+    above — this section lives on `map-view.html`, not `guide.html`).
+    `floorMaps` is a `floor` name → map image path lookup, many-to-one
+    (`Second` and `Crisp Gallery` share one physical-level image, so the
+    map asset can't be derived from `floor` by naive slug). A floor with
+    no `floorMaps` entry (`Loading Bay` — one item, no visual value in a
+    map) has no map at all; render code treats that as "skip," not an
+    error. Per-item `xPct`/`yPct` are percentage-based, top-left origin
+    (`x` right, `y` down — matches CSS `left`/`top` directly, zero
+    conversion), giving that item's pin position on whichever image its
+    floor resolves to. Alarm Floor (`0-A`/`0-B`/`0-C`) was the pilot floor
+    (smallest, 3 items) used to validate pin rendering first — as of
+    2026-08-06, every mappable floor (Vault, Alarm Floor, First,
+    Second/Crisp Gallery) is fully tagged; only `Loading Bay` has no
+    coordinates, and that's permanent (no `floorMaps` entry at all, not
+    "not tagged yet" — see its text-only callout under "Pages" above).
 
 ## Model module
 `js/kch-model.js` is a pure ES module — no `document`, `fetch`, or
