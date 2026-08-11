@@ -338,7 +338,8 @@ confirmation dialog on unlock.
   bonus that can't pay out.
 - **Bag assignment follows a five-tier, value-preserving preference**
   (rewritten 2026-08-02, extended 2026-08-03, widened 2026-08-04, Vault
-  tier added 2026-08-07): `packBins()`'s reconstruction step chooses
+  tier added 2026-08-07, priority-floor processing order fixed 2026-08-09
+  and refined 2026-08-10): `packBins()`'s reconstruction step chooses
   *which bin* an item lands in — never which items get chosen or the
   total secondary value — by, in order: (0) `Vault` items exclude the
   host's bag specifically, whenever a non-host bag is also available
@@ -389,6 +390,27 @@ confirmation dialog on unlock.
   partitions gets realized (the DP's optimal total value is provably
   invariant to processing order for a fixed set of symmetric bins) — it
   never changes total secondary value or which items get selected.
+  **Real bug fix, 2026-08-10:** the 2026-08-09 fix above walked
+  `HOST_PRIORITY_FLOORS` items ahead of every other floor, but *within*
+  that priority bucket itself the two floors still fell back to plain
+  catalog order — `Second`'s items (`2-A`..`2-D`) come before `Crisp
+  Gallery`'s (`2-E`/`2-F`) in the catalog. A real report: when combined
+  `Second` + `Crisp Gallery` weight exceeds one host bag, the smaller
+  `Second` items greedily claimed most of the host's capacity first,
+  leaving no room for a larger `Crisp Gallery` item that arrived later —
+  it fell through to a teammate instead, and an unrelated `First`-floor
+  item got adjacency-clustered in to round out the leftover capacity,
+  forcing an avoidable extra floor stop. This was backwards: `Crisp
+  Gallery`'s host-preference is the *stronger* of the two rationales (the
+  EMP-desync room-verification requirement above), while `Second`'s is
+  the *softer* one (the host's route just happens to pass through).
+  Fixed by giving the priority bucket its own floor sub-rank — `Crisp
+  Gallery` items are walked ahead of `Second` items whenever both are
+  present, so `Crisp Gallery` always wins that capacity race regardless
+  of catalog `order`. `order` still breaks ties within a single floor.
+  Same invariance argument as the 2026-08-09 fix: this only changes which
+  equally-optimal partition gets realized, never the total value or item
+  selection.
   (2) otherwise, prefer a bin that already contains an item on the same floor (general
   floor-clustering, so a crew spends less time running between floors);
   (3) otherwise, prefer a bin that already contains an item on an

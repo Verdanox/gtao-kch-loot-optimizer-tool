@@ -229,6 +229,28 @@ function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 //      realized (solve()'s total value is provably invariant to
 //      processing order for a fixed set of symmetric bins) — never the
 //      total secondary value or which items get selected.
+//      **Real bug fix, 2026-08-10:** the above fix walked Second and
+//      Crisp Gallery items ahead of everything else, but *within* that
+//      priority bucket they still fell back to plain catalog order
+//      (Second's items 2-A..2-D come before Crisp Gallery's 2-E/2-F in
+//      the catalog). A real report: when combined Second + Crisp Gallery
+//      weight exceeds one host bag, the smaller Second items greedily
+//      claimed most of bin 0 first, leaving no room for the larger Crisp
+//      Gallery paintings by the time their turn came up — those fell
+//      through to a teammate instead, and an unrelated First-floor item
+//      got adjacency-clustered into bin 0's last few units of capacity to
+//      round it out, forcing an avoidable extra floor stop. This is
+//      backwards: Crisp Gallery's host-preference is the *stronger* of
+//      the two rationales (the EMP-desync room-verification requirement
+//      above), while Second's is the *softer* one (the host's route just
+//      happens to pass through). Fixed by giving the priority bucket its
+//      own floor sub-rank — Crisp Gallery items are walked ahead of
+//      Second items whenever both are present — so Crisp Gallery always
+//      wins ties for bin 0's capacity over Second, matching which
+//      rationale is actually the harder requirement. `order` still
+//      breaks ties within a single floor. Same invariance argument as
+//      above: this only changes which equally-optimal partition gets
+//      realized, never the total value or item selection.
 //   2. Otherwise, prefer a bin that already contains an item sharing the
 //      same `.floor` — general floor-clustering, so a crew spends less
 //      time running between floors to collect their assigned loot.
@@ -312,8 +334,19 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
   // `order` tiebreak above) — see tier 1's doc comment above for the real
   // bug this fixes. `order` still decides sequence *within* each priority
   // bucket, so this stays just as toggle-independent as the fix above.
+  //
+  // 2026-08-10: within that priority bucket itself, Crisp Gallery items
+  // now sort ahead of Second items (a second sort key, between
+  // `priorityRank` and `order`) — see tier 1's doc comment above for the
+  // real bug this fixes. `order` remains the final tiebreak within a
+  // single floor.
   const priorityRank = (it) => HOST_PRIORITY_FLOORS.has(it.floor) ? 0 : 1;
-  items.sort((a, b) => (priorityRank(a) - priorityRank(b)) || ((a.order ?? 0) - (b.order ?? 0)));
+  const floorSubRank = (it) => it.floor === 'Crisp Gallery' ? 0 : it.floor === 'Second' ? 1 : 2;
+  items.sort((a, b) =>
+    (priorityRank(a) - priorityRank(b)) ||
+    (floorSubRank(a) - floorSubRank(b)) ||
+    ((a.order ?? 0) - (b.order ?? 0))
+  );
 
   const NEG = -Infinity;
   const memo = new Map();
