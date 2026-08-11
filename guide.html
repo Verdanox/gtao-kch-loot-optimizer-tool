@@ -51,7 +51,7 @@
        security combo, who-grabs-what, floor maps) lives on its own page
        now, so the host has something screenshot/pin-friendly during the
        actual run that isn't buried under the planning content below. -->
-  <div class="no-print" style="margin:16px 0;">
+  <div class="no-print" id="mapViewGateway" style="margin:16px 0;">
     <button type="button" id="mapViewBtn" class="map-view-btn">Map View →</button>
   </div>
 
@@ -105,6 +105,15 @@ import {
 // is presentation-only (kch-model.js stays free of display concerns).
 const PREP_LABELS = { 'glass-cutter': 'Glass Cutter' };
 function prepLabel(slug) { return PREP_LABELS[slug] || slug; }
+
+// Kill switch for the Map View gateway (added 2026-08-10). Flip to false
+// and redeploy to instantly hide the "Map View ->" button/section without
+// touching git history, data, or js/kch-model.js — a fast rollback lever
+// if map-view.html ships with an issue, kept independent of any unrelated
+// in-flight fix elsewhere (e.g. the model/calculator). Direct navigation
+// to map-view.html itself still works while this is false; this only
+// gates discoverability from guide.html.
+const MAP_VIEW_ENABLED = true;
 
 // ---------- DATA ----------
 let PRIMARY_TARGETS = [];
@@ -562,7 +571,11 @@ async function init(){
 
     wireSecurityCombo();
     initFeedbackControls();
-    document.getElementById('mapViewBtn').addEventListener('click', () => { location.href = 'map-view.html'; });
+    if (MAP_VIEW_ENABLED) {
+      document.getElementById('mapViewBtn').addEventListener('click', () => { location.href = 'map-view.html'; });
+    } else {
+      document.getElementById('mapViewGateway').style.display = 'none';
+    }
     renderGuide();
   } catch (err) {
     document.getElementById('bagLedger').innerHTML =

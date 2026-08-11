@@ -32,6 +32,19 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   run*, reached via the "Map View →" button on `guide.html` (sitting
   between "Who Grabs What" and "Finale Result" — the seam between
   operational and planning content) and a "← Back to Guide" link back.
+  **`guide.html` gates that button behind a `MAP_VIEW_ENABLED` constant**
+  (added 2026-08-10, near the top of its module script) — a deploy-time
+  kill switch: flip to `false` and redeploy to instantly hide the
+  gateway button/section without a git revert, in case the feature ships
+  with an issue post-launch. Deliberately only hides discoverability from
+  `guide.html` — it doesn't gate `map-view.html` itself, so a direct URL
+  still works while the flag is off; adding that would mean duplicating
+  the flag onto `map-view.html` too, which already deliberately duplicates
+  rather than shares render helpers with `guide.html` (see below), and
+  wasn't asked for. Chosen over a full git revert because the map feature
+  and any unrelated in-flight fix (e.g. to `js/kch-model.js`) live in
+  different files, so this flag can be flipped independently of whatever
+  else has landed since.
   Exists because `guide.html` conflates two audiences that have nothing to
   do with each other mid-heist: planning/bookkeeping (Finale Result,
   Payout by Player, Career Progress, Crew Size Comparison — relevant
