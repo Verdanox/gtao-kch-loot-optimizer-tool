@@ -389,18 +389,32 @@ confirmation dialog on unlock.
 - **Bag assignment follows a five-tier, value-preserving preference**
   (rewritten 2026-08-02, extended 2026-08-03, widened 2026-08-04, Vault
   tier added 2026-08-07, priority-floor processing order fixed 2026-08-09,
-  refined 2026-08-10, refined again 2026-08-13): `packBins()`'s
+  refined 2026-08-10, refined again 2026-08-13, Alarm Floor added to tier
+  0 2026-08-14): `packBins()`'s
   reconstruction step chooses *which bin* an item lands in — never which
-  items get chosen or the total secondary value — by, in order: (0) `Vault` items exclude the
+  items get chosen or the total secondary value — by, in order: (0) `Vault`
+  and `Alarm Floor` items exclude the
   host's bag specifically, whenever a non-host bag is also available
-  (`HOST_AVOID_FLOORS`) — confirmed with the user 2026-08-07: the host
+  (`HOST_AVOID_FLOORS`) — `Vault` confirmed with the user 2026-08-07: the host
   alone must physically enter the Vault for the Primary Target, so
   routing Vault secondary loot to a teammate instead lets it be grabbed
   in parallel rather than requiring the host to double back for it after
   the primary grab, which matters for the Elite Challenge's 17-minute
   clock. This reverses the floor's previous "deliberately neutral"
   status — falls back to including the host only when they're the sole
-  remaining valid bag (a solo run, or every other bag already full);
+  remaining valid bag (a solo run, or every other bag already full).
+  `Alarm Floor` joined the same set 2026-08-14, user request, for a
+  different reason: the host's real route is Vault → building 2nd floor
+  (tier 1 below) and never passes through Alarm Floor
+  (`FLOOR_ADJACENCY`: `Alarm Floor` only touches `First`, not `Second`/
+  `Crisp Gallery`), so a host bag that also picked up Alarm Floor loot —
+  via tier 2/3/4, since it sat in neither `HOST_PRIORITY_FLOORS` nor
+  `HOST_AVOID_FLOORS` before this — forced a genuine backtrack during the
+  timed run; this is exactly the cross-floor mishmash the 2026-08-09 bug
+  report showed. `First` Floor was considered and deliberately excluded
+  from this tier (confirmed with the user): it neighbors `Second`/`Crisp
+  Gallery` directly, so a host stop there isn't the same off-route
+  detour;
   (1) `Second` and `Crisp Gallery` items prefer the host's bag
   specifically (`HOST_PRIORITY_FLOORS`, shared with
   `assignItemsToBags()`'s own separate mechanism below). `Crisp Gallery`'s
