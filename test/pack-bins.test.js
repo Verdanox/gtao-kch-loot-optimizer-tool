@@ -361,6 +361,44 @@ test('adjacent-floor preference falls through gracefully when the only adjacent 
   assert.ok(result.bags[1].items.some(i => i.id === 'B'), 'adjacent-floor item should fall through to a non-adjacent bin, not be dropped');
 });
 
+// Regression test for the real 2026-08-13 bug report: a 2-player run where
+// five selected Crisp Gallery items (weights 20, 30(BC), 20(BC), 10, 30 —
+// combined weight exactly 100, one full host bag) got split across BOTH
+// bags because catalog order walked the four smaller items into the host
+// bag first, leaving only 20 capacity free — not enough for the fifth,
+// larger item (Venus d'Algernon, weight 30), which fell through to the
+// teammate's bag while two unrelated First-floor items backfilled the
+// host's leftover capacity, forcing an avoidable extra floor stop. Fixed
+// by walking priority-floor items largest-weight-first (see packBins()'s
+// 2026-08-13 sort comment) so the host bag fills with same-floor items in
+// an order that actually finds the all-one-floor partition when one
+// exists at the same total value.
+test('largest priority-floor item is walked first, so a same-floor host bag is found instead of starving a late-order item into a cross-floor fallback', () => {
+  const values = {
+    'B-A':90000,'B-B':85000,'B-C':75000,'B-D':75000,
+    'BAY':105000,
+    '0-A':87500,'0-B':52000,
+    '1-A':58000,'1-C':33000,'1-D':34000,'1-E':112500,'1-F':117500,'1-G':110000,'1-H':117500,'1-I':110000,'1-K':29000,'1-L':34000,
+    '2-A':56000,'2-B':97500,'2-C':95000,'2-D':32000,
+    '2-E':157500,'2-F':155000,'2-G':92000,'2-H':115000,'2-I':94000,'2-J':43000,'2-K':115000,
+    '2-L':120000,'2-M':112500
+  };
+  const bcIds = new Set(['2-H', '2-I']); // Gemstone, Meteorite Fragment
+  const loot = catalog.map(cat => ({
+    itemId: cat.itemId,
+    value: Object.prototype.hasOwnProperty.call(values, cat.itemId) ? values[cat.itemId] : '',
+    buyersChoice: bcIds.has(cat.itemId)
+  }));
+  const state = { primaryId: 'x', difficulty: 'normal', weekly: 'first', players: 2, elite: 'yes', loot };
+  const result = runOptimizer(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+
+  assert.equal(result.secondaryBagValue, 762500, 'total secondary value is unaffected by routing');
+  const hostFloors = new Set(result.bags[0].items.map(i => i.floor));
+  assert.deepEqual(hostFloors, new Set(['Crisp Gallery']), 'host bag should be entirely Crisp Gallery — no First-floor detour needed');
+  const hostIds = result.bags[0].items.map(i => i.itemId).sort();
+  assert.deepEqual(hostIds, ['2-G', '2-H', '2-I', '2-K'], 'host should carry all four selected Crisp Gallery items, including the larger, later-catalog-order Venus d\'Algernon');
+});
+
 // Regression test for the real 2026-08-04 bug report: the same scope-out,
 // resubmitted with Elite Challenge toggled on vs off, produced two
 // DIFFERENT bag splits despite an identical $740,000 secondary total and

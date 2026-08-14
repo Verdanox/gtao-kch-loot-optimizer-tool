@@ -29,35 +29,48 @@ test('header row is always Item,Floor,Value', () => {
   assert.equal(csv.split('\r\n')[0], 'Item,Floor,Value');
 });
 
-test('unscoped/blank items are excluded entirely', () => {
+test('unscoped/blank items still get a row, with a blank Value field', () => {
   const loot = catalog.map(cat => ({ itemId: cat.itemId, value: '', buyersChoice: false, variant: '' }));
   const csv = buildScopeCsv(loot, catalog);
-  // Header only — nothing was scoped.
-  assert.equal(csv, 'Item,Floor,Value');
+  const lines = csv.split('\r\n');
+  // 2026-08-13, user feedback: every catalog item gets a row so pasting
+  // straight into a spreadsheet needs no hand-inserted blank rows to stay
+  // aligned with other runs. Header + one row per catalog item.
+  assert.equal(lines.length - 1, catalog.length);
+  const firstItem = catalog[0];
+  assert.equal(lines[1], `${firstItem.name},${firstItem.floor},`);
 });
 
-test('one row per scoped item, in catalog order, against the real sample-run fixture', () => {
+test('one row per catalog item (blank Value if unscoped), in catalog order, against the real sample-run fixture', () => {
   const loot = lootFromSampleRun();
   const csv = buildScopeCsv(loot, catalog);
   const lines = csv.split('\r\n');
   assert.equal(lines[0], 'Item,Floor,Value');
 
-  const scopedIds = catalog.filter(cat => sampleRun.secondaryLoot[cat.itemId] !== undefined).map(cat => cat.itemId);
-  assert.equal(lines.length - 1, scopedIds.length, 'one data row per scoped item, nothing more or less');
+  // Every catalog item gets a row now, scoped or not.
+  assert.equal(lines.length - 1, catalog.length, 'one data row per catalog item, nothing more or less');
 
-  // Catalog order preserved: B-A (unscoped) is skipped, so the first data
-  // row should be B-B (Vault), the first item in the fixture's scoped set.
-  const bb = itemById(catalog, 'B-B');
-  assert.equal(lines[1], `${bb.name},${bb.floor},${sampleRun.secondaryLoot['B-B']}`);
+  // Catalog order preserved: B-A is the first catalog item. Its Value is
+  // blank if it wasn't scoped in the fixture, filled in if it was.
+  const ba = itemById(catalog, 'B-A');
+  const baValue = sampleRun.secondaryLoot['B-A'] !== undefined ? String(sampleRun.secondaryLoot['B-A']) : '';
+  assert.equal(lines[1], `${ba.name},${ba.floor},${baValue}`);
 
   // BAY's fixedValue reaches the CSV as a plain number like any other item.
   const bay = itemById(catalog, 'BAY');
   assert.ok(lines.includes(`${bay.name},${bay.floor},${sampleRun.secondaryLoot['BAY']}`));
 
-  // Value is a plain number — no "$" or thousands separator.
+  // Scoped items' Value is a plain number — no "$" or thousands separator.
+  // Unscoped items' Value is simply blank.
+  const scopedIds = new Set(catalog.filter(cat => sampleRun.secondaryLoot[cat.itemId] !== undefined).map(cat => cat.itemId));
   lines.slice(1).forEach(line => {
-    const value = line.split(',').pop();
-    assert.ok(/^\d+$/.test(value), `value field "${value}" should be a bare integer`);
+    const [name, floor, value] = line.split(',');
+    const cat = catalog.find(c => c.name === name && c.floor === floor);
+    if (cat && scopedIds.has(cat.itemId)) {
+      assert.ok(/^\d+$/.test(value), `value field "${value}" should be a bare integer`);
+    } else {
+      assert.equal(value, '', `unscoped item "${name}" should have a blank value field`);
+    }
   });
 });
 

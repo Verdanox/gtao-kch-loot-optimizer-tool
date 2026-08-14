@@ -15,9 +15,14 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   header actions bar) copies the current run's scoped item values to the
   clipboard, since the user tracks values across runs over time in their
   own external spreadsheet and had no way to preserve a scope-out before
-  clearing the board. One row per item that was actually scoped (blank
-  items skipped), in catalog order, three columns: Item, Floor, Value.
-  Floor is a real, load-bearing column, not decorative — two catalog
+  clearing the board. One row per **catalog** item, full stop, in catalog
+  order, three columns: Item, Floor, Value — unscoped items still get a
+  row, just with a blank Value field (changed 2026-08-13, user feedback:
+  pasting straight into a spreadsheet is easier when every item's row is
+  already present, rather than needing blank rows hand-inserted afterward
+  to keep alignment with other runs' pastes; originally shipped
+  2026-08-10 skipping unscoped items entirely). Floor is a real,
+  load-bearing column, not decorative — two catalog
   items share a name ("Oeuf de Coquard" on both Alarm Floor and Second;
   "Fertility Statue" on both First and Crisp Gallery), so Item alone
   can't disambiguate them if both are scoped in the same run; the user
@@ -364,10 +369,10 @@ confirmation dialog on unlock.
   bonus that can't pay out.
 - **Bag assignment follows a five-tier, value-preserving preference**
   (rewritten 2026-08-02, extended 2026-08-03, widened 2026-08-04, Vault
-  tier added 2026-08-07, priority-floor processing order fixed 2026-08-09
-  and refined 2026-08-10): `packBins()`'s reconstruction step chooses
-  *which bin* an item lands in — never which items get chosen or the
-  total secondary value — by, in order: (0) `Vault` items exclude the
+  tier added 2026-08-07, priority-floor processing order fixed 2026-08-09,
+  refined 2026-08-10, refined again 2026-08-13): `packBins()`'s
+  reconstruction step chooses *which bin* an item lands in — never which
+  items get chosen or the total secondary value — by, in order: (0) `Vault` items exclude the
   host's bag specifically, whenever a non-host bag is also available
   (`HOST_AVOID_FLOORS`) — confirmed with the user 2026-08-07: the host
   alone must physically enter the Vault for the Primary Target, so
@@ -437,6 +442,29 @@ confirmation dialog on unlock.
   Same invariance argument as the 2026-08-09 fix: this only changes which
   equally-optimal partition gets realized, never the total value or item
   selection.
+  **Real bug fix, 2026-08-13:** even with floor-level ordering fixed, a
+  same-floor problem remained *within* a single priority floor. A real
+  2-player report: four smaller selected `Crisp Gallery` items (weights
+  20, 30, 20, 10 — two of them Buyer's Choice-mandatory) walked in plain
+  catalog order and claimed 80 of the host's 100 capacity, leaving only
+  20 free — not enough for a fifth, larger selected `Crisp Gallery` item
+  (Venus d'Algernon, weight 30, later in catalog order), which fell
+  through to the teammate's bag while two unrelated `First`-floor items
+  backfilled the host's leftover capacity instead, forcing an avoidable
+  detour to First Floor. All five items summed to exactly 100 — a
+  same-value, all-Crisp-Gallery host bag existed, catalog order just
+  never found it. Fixed by walking priority-floor items
+  largest-weight-first (a third sort key, between the floor sub-rank
+  above and `order`) — the standard bin-packing fix for this shape of
+  problem (place the least-flexible item first, while the most capacity
+  is still open), the same rationale `assignItemsToBags()`'s own
+  First-Fit-Decreasing already uses elsewhere in this file. Scoped to
+  apply only *within* a priority floor (a no-op whenever either item
+  being compared is non-priority), so no other tier or non-priority
+  floor's processing order changes. `order` remains the final tiebreak
+  among same-floor items of equal weight. Same invariance argument as the
+  2026-08-09/2026-08-10 fixes: this only changes which equally-optimal
+  partition gets realized, never the total value or item selection.
   (2) otherwise, prefer a bin that already contains an item on the same floor (general
   floor-clustering, so a crew spends less time running between floors);
   (3) otherwise, prefer a bin that already contains an item on an
