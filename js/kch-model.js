@@ -722,28 +722,31 @@ function csvEscapeField(field) {
 // Builds a CSV string of this run's scoped secondary loot, for the user
 // to copy/paste into their own external tracking spreadsheet before
 // clearing the board (2026-08-10, user request — they track item values
-// across runs over time outside this app). One row per item that was
-// actually scoped this run (a non-blank, numeric `value` — the same
-// filter `runOptimizer()`'s `valid` list uses), walked in `catalog`
-// order so output is stable and matches every other per-item listing in
-// the app. Columns are Item, Floor, Value — Floor is a real, load-bearing
-// column, not decorative: two catalog items share a name ("Oeuf de
-// Coquard" on both Alarm Floor and Second; "Fertility Statue" on both
-// First and Crisp Gallery), so Item alone can't disambiguate them if both
-// are scoped in the same run. Value is written as a plain number (no `$`,
-// no thousands separator) so a spreadsheet treats the column as numeric
-// on paste rather than as text. `BAY` (the one checkbox item) needs no
-// special-casing — its value only exists in `loot` at all once checked,
-// same as any other item passing the scoped-value filter. Pure/DOM-free
-// like every other function here — index.html owns the actual
-// `navigator.clipboard` call.
+// across runs over time outside this app). One row per **catalog** item,
+// full stop — walked in `catalog` order so output is stable and matches
+// every other per-item listing in the app. Unscoped items (no non-blank,
+// numeric `value` — the same filter `runOptimizer()`'s `valid` list uses)
+// still get a row, just with a blank Value field (2026-08-13, user
+// feedback: pasting straight into a spreadsheet is easier when every
+// item's row is already there, rather than needing blank rows
+// hand-inserted afterward to keep alignment with other runs' pastes).
+// Columns are Item, Floor, Value — Floor is a real, load-bearing column,
+// not decorative: two catalog items share a name ("Oeuf de Coquard" on
+// both Alarm Floor and Second; "Fertility Statue" on both First and Crisp
+// Gallery), so Item alone can't disambiguate them if both are scoped in
+// the same run. Value is written as a plain number (no `$`, no thousands
+// separator) so a spreadsheet treats the column as numeric on paste
+// rather than as text. `BAY` (the one checkbox item) needs no
+// special-casing — it just gets a blank Value row like any other
+// unchecked item. Pure/DOM-free like every other function here —
+// index.html owns the actual `navigator.clipboard` call.
 export function buildScopeCsv(loot, catalog) {
   const lootById = new Map(loot.map(l => [l.itemId, l]));
   const rows = [['Item', 'Floor', 'Value']];
   catalog.forEach(cat => {
     const entry = lootById.get(cat.itemId);
-    if (!entry || entry.value === '' || entry.value === null || entry.value === undefined || isNaN(entry.value)) return;
-    rows.push([cat.name, cat.floor, String(Number(entry.value))]);
+    const scoped = entry && entry.value !== '' && entry.value !== null && entry.value !== undefined && !isNaN(entry.value);
+    rows.push([cat.name, cat.floor, scoped ? String(Number(entry.value)) : '']);
   });
   return rows.map(r => r.map(csvEscapeField).join(',')).join('\r\n');
 }

@@ -15,9 +15,14 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   header actions bar) copies the current run's scoped item values to the
   clipboard, since the user tracks values across runs over time in their
   own external spreadsheet and had no way to preserve a scope-out before
-  clearing the board. One row per item that was actually scoped (blank
-  items skipped), in catalog order, three columns: Item, Floor, Value.
-  Floor is a real, load-bearing column, not decorative — two catalog
+  clearing the board. One row per **catalog** item, full stop, in catalog
+  order, three columns: Item, Floor, Value — unscoped items still get a
+  row, just with a blank Value field (changed 2026-08-13, user feedback:
+  pasting straight into a spreadsheet is easier when every item's row is
+  already present, rather than needing blank rows hand-inserted afterward
+  to keep alignment with other runs' pastes; originally shipped
+  2026-08-10 skipping unscoped items entirely). Floor is a real,
+  load-bearing column, not decorative — two catalog
   items share a name ("Oeuf de Coquard" on both Alarm Floor and Second;
   "Fertility Statue" on both First and Crisp Gallery), so Item alone
   can't disambiguate them if both are scoped in the same run; the user
