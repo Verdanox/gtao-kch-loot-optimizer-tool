@@ -43,6 +43,25 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   action rather than specifically a clear-time safety net. JSON export
   (for a future clean re-import feature) was considered and explicitly
   deferred — not a need right now.
+  **Step order was reshuffled 2026-08-13** (Crew Size moved from Step 2
+  to Step 4, now right after Elite Challenge, ahead of Crew Names):
+  crew size might not actually be decided until after the loot's already
+  been scoped, so asking for it second forced a premature choice. This
+  is a pure DOM/markup reorder — every step's inner control still autosaves
+  to the same `state` fields via the same element IDs, and `renderAll()`
+  reads `state.players` on every change regardless of where its step
+  physically sits, so nothing downstream needed touching (verified: the
+  loot chart's per-floor "Needs N+ players" note already reads
+  `state.players` live, not step position). The Scoped Secondary Loot
+  hint text was tightened the same day (fewer clauses per sentence) and
+  its "Elite Challenge (Step 4)" cross-reference was changed to "(below)"
+  — a hardcoded step number would have gone stale the moment step order
+  changed again, and "below" stays true regardless (Elite Challenge has
+  always immediately followed the loot chart, before or after this
+  reorder). The hint also now explicitly says Buyer's Choice is marked
+  "by clicking the item" (user-requested addition) — the click target is
+  the whole row/label, not a small checkbox, and that wasn't obvious from
+  the text before.
 - `guide.html` — Page 2, Heist Guide. The results/manifest screen, meant to
   be screenshotted or printed during the run. Top-to-bottom: a glass-cutter
   prep reminder banner (if applicable), the security-door-combination field
