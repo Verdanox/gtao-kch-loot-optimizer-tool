@@ -124,7 +124,17 @@ const HOST_PRIORITY_BOOST = 8;
 // grabbing Vault secondary loot, for the Elite Challenge's 17-minute
 // clock). Not read by assignItemsToBags() — that function keeps its own,
 // separate, untouched host-priority-only mechanism.
-const HOST_AVOID_FLOORS = new Set(['Vault']);
+//
+// 2026-08-14: Alarm Floor joined this set (user request, live-execution
+// pathing complaint) — the host's real route is Vault -> building 2nd
+// floor (HOST_PRIORITY_FLOORS above), which never passes through Alarm
+// Floor (FLOOR_ADJACENCY below: Alarm Floor only touches First, not
+// Second/Crisp Gallery). A host bag that also picked up Alarm Floor loot
+// via tier 2/3/4 forced a real backtrack during the timed run. First
+// Floor was considered and deliberately excluded — it's adjacent to
+// Second/Crisp Gallery directly, so a host stop there isn't the same
+// off-route detour Alarm Floor is.
+const HOST_AVOID_FLOORS = new Set(['Vault', 'Alarm Floor']);
 
 // First-Fit-Decreasing bin pack: distributes chosen items across `players`
 // individual bags of `capacityPerPlayer` each. Index 0 is always the host.
@@ -191,6 +201,14 @@ function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
 //      pulls loot TOWARD the host) and falls back to including the host
 //      when they're the only remaining valid bin (a solo run, or every
 //      other bag already full).
+//      Alarm Floor joined HOST_AVOID_FLOORS 2026-08-14 for a different
+//      reason: the host's real route (Vault -> building 2nd floor, tier 1
+//      below) never passes through Alarm Floor, so a host bag that also
+//      picked up Alarm Floor loot forced a genuine backtrack during the
+//      timed run — the same mechanism, applied for a pathing reason
+//      rather than a parallelization one. First Floor was deliberately
+//      excluded from this — it neighbors Second/Crisp Gallery directly,
+//      so it isn't the same off-route detour.
 //   1. Second and Crisp Gallery items prefer bin 0 (the host) —
 //      HOST_PRIORITY_FLOORS, shared with assignItemsToBags() above.
 //      Crisp Gallery's own rationale (confirmed with the user

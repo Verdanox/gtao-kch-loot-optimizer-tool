@@ -200,12 +200,16 @@ test('Crisp Gallery preference falls through gracefully when the host bin truly 
 // HOST_PRIORITY_FLOORS items ahead of every other floor regardless of
 // catalog `order`.
 test('a later-catalog-order priority-floor item still claims the host bag ahead of an earlier-catalog-order non-priority item', () => {
-  // 'Alarm Floor' (not 'First') for F: First is adjacent to Second, which
-  // would let F legitimately tier-3-cluster into whatever bin S landed in
-  // — using a floor with no adjacency to Second isolates this test to the
-  // priority-reordering behavior alone.
+  // 'Loading Bay' (not 'First' or 'Alarm Floor') for F: First is adjacent
+  // to Second, which would let F legitimately tier-3-cluster into whatever
+  // bin S landed in; Alarm Floor is a tier-0 host-avoid floor as of
+  // 2026-08-14, which would route F away from bin 0 on its own and no
+  // longer isolate this test to the priority-reordering behavior it's
+  // meant to cover. Loading Bay is neutral (neither avoid nor priority)
+  // and isolated (no adjacency to anything), so it isolates this test to
+  // the priority-reordering behavior alone.
   const optional = [
-    { id: 'F', value: 50, weightUnits: 30, floor: 'Alarm Floor', order: 0 }, // earlier catalog position, non-priority
+    { id: 'F', value: 50, weightUnits: 30, floor: 'Loading Bay', order: 0 }, // earlier catalog position, non-priority
     { id: 'S', value: 50, weightUnits: 30, floor: 'Second', order: 1 },      // later catalog position, priority floor
   ];
   const result = packBins([], optional, 2, 100);
@@ -305,6 +309,69 @@ test('a Vault item falls back to the host bag when the non-host bag no longer ha
   assert.equal(bagOf('B'), 0, 'second Vault item falls back to the host bag once the non-host bag lacks room');
 });
 
+// Regression coverage for the 2026-08-14 extension of HOST_AVOID_FLOORS to
+// Alarm Floor (user request, live-execution pathing complaint): the host's
+// real route is Vault -> building 2nd floor (Second/Crisp Gallery, tier 1)
+// and never passes through Alarm Floor (FLOOR_ADJACENCY: Alarm Floor only
+// touches First), so a host bag that also picked up Alarm Floor loot forced
+// a real backtrack. Mirrors the existing Vault-avoidance test block above —
+// same tier-0 mechanism, now covering a second floor.
+test('Alarm Floor items exclude the host bag but still floor-cluster together via tier 2', () => {
+  const mandatory = [{ id: 'A', value: 500, weightUnits: 60, floor: 'Alarm Floor' }];
+  const optional = [
+    { id: 'V', value: 50, weightUnits: 30, floor: 'Alarm Floor' },
+    { id: 'L', value: 50, weightUnits: 30, floor: 'Loading Bay' },
+  ];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.notEqual(bagOf('A'), 0, 'Alarm Floor items should never land in the host bag when a non-host bag is available');
+  assert.equal(bagOf('V'), bagOf('A'), 'V shares A\'s floor and should still cluster via tier 2 among non-host bags');
+  assert.equal(bagOf('L'), 0, 'Loading Bay is unaffected by Alarm Floor host-avoidance and falls back to the emptier (host) bag via tier 4');
+});
+
+test('a lone Alarm Floor item is routed away from the host bag when a non-host bag is available', () => {
+  const mandatory = [{ id: 'A', value: 100, weightUnits: 50, floor: 'Alarm Floor' }];
+  const result = packBins(mandatory, [], 2, 100);
+  assert.ok(result);
+  assert.equal(result.bags[0].items.length, 0, 'host bag should stay empty when a non-host bag can take the Alarm Floor item instead');
+  assert.ok(result.bags[1].items.some(i => i.id === 'A'), 'Alarm Floor item should land in the non-host bag');
+});
+
+test('an Alarm Floor item still packs into the host bag when it is the only bag (solo run)', () => {
+  const mandatory = [{ id: 'A', value: 100, weightUnits: 50, floor: 'Alarm Floor' }];
+  const result = packBins(mandatory, [], 1, 100);
+  assert.ok(result);
+  assert.ok(result.bags[0].items.some(i => i.id === 'A'), 'with only one bag, the Alarm Floor item must still be packed into it');
+});
+
+test('an Alarm Floor item falls back to the host bag when the non-host bag no longer has room', () => {
+  const mandatory = [
+    { id: 'A', value: 100, weightUnits: 90, floor: 'Alarm Floor' },
+    { id: 'B', value: 100, weightUnits: 50, floor: 'Alarm Floor' },
+  ];
+  const result = packBins(mandatory, [], 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.equal(bagOf('A'), 1, 'first Alarm Floor item routes to the non-host bag');
+  assert.equal(bagOf('B'), 0, 'second Alarm Floor item falls back to the host bag once the non-host bag lacks room');
+});
+
+test('Alarm Floor avoidance (tier 0) and Second-floor host priority (tier 1) coexist without fighting each other', () => {
+  // A mixed scope-out: Alarm Floor loot should route away from the host
+  // while Second-floor loot still routes toward the host, on the very same
+  // reconstruction pass, at a real 2-player crew size.
+  const mandatory = [
+    { id: 'A', value: 100, weightUnits: 40, floor: 'Alarm Floor' },
+    { id: 'S', value: 100, weightUnits: 40, floor: 'Second' },
+  ];
+  const result = packBins(mandatory, [], 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.notEqual(bagOf('A'), 0, 'Alarm Floor item should still be routed away from the host bag');
+  assert.equal(bagOf('S'), 0, 'Second-floor item should still be routed toward the host bag');
+});
+
 // Regression coverage for the 2026-08-03 adjacent-floor tie-break: a
 // softer nudge, ranked below exact-floor-match and above least-loaded,
 // for clustering items whose floors are one real-map transition apart
@@ -338,12 +405,19 @@ test('exact-floor match still outranks adjacent-floor match', () => {
 });
 
 test('isolated floors (Vault, Loading Bay) never soft-cluster with anything', () => {
-  const mandatory = [{ id: 'A', value: 100, weightUnits: 50, floor: 'Alarm Floor' }];
+  // 'First' (not 'Alarm Floor') for A: Alarm Floor is a tier-0 host-avoid
+  // floor as of 2026-08-14, same as Vault — with only 2 bins, two
+  // independently host-avoided items would both get pushed into the same
+  // non-host bin regardless of adjacency, defeating the point of this
+  // test. 'First' is neither avoid nor priority, so A lands in the host
+  // bin via the normal tier-4 tie-break, isolating this to Vault's actual
+  // adjacency (rather than tier-0) behavior.
+  const mandatory = [{ id: 'A', value: 100, weightUnits: 50, floor: 'First' }];
   const optional = [{ id: 'B', value: 50, weightUnits: 20, floor: 'Vault' }];
   const result = packBins(mandatory, optional, 2, 100);
   assert.ok(result);
   const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
-  assert.notEqual(bagOf('B'), bagOf('A'), 'Vault is isolated and should not adjacency-cluster with Alarm Floor');
+  assert.notEqual(bagOf('B'), bagOf('A'), 'Vault is isolated and should not adjacency-cluster with First');
 });
 
 test('adjacent-floor preference falls through gracefully when the only adjacent bin has no room', () => {
@@ -352,13 +426,19 @@ test('adjacent-floor preference falls through gracefully when the only adjacent 
   // walked ahead of every other floor, so using 'Second' here — as this
   // test originally did — would let B claim bin 0 via tier 1 before A
   // ever gets a chance to fill it, defeating the point of this test,
-  // which is specifically about tier 3's adjacency fallback).
-  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'Alarm Floor' }]; // fills bin 0 completely
+  // which is specifically about tier 3's adjacency fallback). Alarm Floor
+  // is ALSO a tier-0 host-avoid floor as of 2026-08-14, so with two
+  // symmetric empty bins, A lands in bin 1 (the only remaining valid bin
+  // once tier 0 filters bin 0 out) rather than bin 0 — the test still
+  // demonstrates the same principle (B prefers to cluster with A's
+  // adjacent floor, but falls through to the OTHER bin once A's bin has
+  // no room left), just with the bin indices swapped from before.
+  const mandatory = [{ id: 'A', value: 1000, weightUnits: 100, floor: 'Alarm Floor' }]; // fills bin 1 completely (tier 0 routes it away from bin 0)
   const optional = [{ id: 'B', value: 50, weightUnits: 10, floor: 'First' }];
   const result = packBins(mandatory, optional, 2, 100);
   assert.ok(result);
   assert.equal(result.value, 1050, 'the adjacency preference should still pack B, just not with the full bin');
-  assert.ok(result.bags[1].items.some(i => i.id === 'B'), 'adjacent-floor item should fall through to a non-adjacent bin, not be dropped');
+  assert.ok(result.bags[0].items.some(i => i.id === 'B'), 'adjacent-floor item should fall through to the non-full bin, not be dropped');
 });
 
 // Regression test for the real 2026-08-13 bug report: a 2-player run where
