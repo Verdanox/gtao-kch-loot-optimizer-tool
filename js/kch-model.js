@@ -338,13 +338,39 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
   // 2026-08-10: within that priority bucket itself, Crisp Gallery items
   // now sort ahead of Second items (a second sort key, between
   // `priorityRank` and `order`) — see tier 1's doc comment above for the
-  // real bug this fixes. `order` remains the final tiebreak within a
-  // single floor.
+  // real bug this fixes.
+  //
+  // 2026-08-13: within a single priority floor (e.g. every selected Crisp
+  // Gallery item), items now walk largest-weight-first, ahead of `order`
+  // — a third sort key, between `floorSubRank` and `order`. Real bug
+  // report: a 2-player run where the host's Crisp-Gallery-only capacity
+  // (100) exactly matched four selected Crisp Gallery items' combined
+  // weight, but plain catalog order walked four *smaller* items
+  // (Fertility Statue 20, Gemstone 30, Meteorite Fragment 20, Art Deco
+  // Circlets 10 = 80) into the host bag first, leaving only 20 capacity
+  // free — not enough for the fifth, larger selected item (Venus
+  // d'Algernon, 30), which fell through to the teammate's bag along with
+  // a still-mostly-empty slice of host capacity backfilled by two
+  // unrelated First-floor items. That forced the host to detour to First
+  // Floor for no reason, when swapping Venus d'Algernon in for the two
+  // First-floor items (and Art Deco Circlets) would have given the host
+  // an entirely Crisp-Gallery bag at the exact same total value — a valid
+  // equally-optimal partition the old ordering simply never reached.
+  // Largest-first is the standard bin-packing fix for this shape of
+  // problem (place the item with the least placement flexibility first,
+  // while the most capacity is still open) — same rationale
+  // `assignItemsToBags()`'s own First-Fit-Decreasing already uses
+  // elsewhere in this file. Scoped to *within* a priority floor only
+  // (`priorityRank(a) === 0` guards the term to 0, a no-op, whenever
+  // either item is non-priority) so every other tier's behavior, and
+  // every non-priority floor's processing order, is untouched. `order`
+  // remains the final tiebreak within same-floor items of equal weight.
   const priorityRank = (it) => HOST_PRIORITY_FLOORS.has(it.floor) ? 0 : 1;
   const floorSubRank = (it) => it.floor === 'Crisp Gallery' ? 0 : it.floor === 'Second' ? 1 : 2;
   items.sort((a, b) =>
     (priorityRank(a) - priorityRank(b)) ||
     (floorSubRank(a) - floorSubRank(b)) ||
+    (priorityRank(a) === 0 ? (b.w - a.w) : 0) ||
     ((a.order ?? 0) - (b.order ?? 0))
   );
 
