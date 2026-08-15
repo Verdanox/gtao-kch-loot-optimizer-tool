@@ -432,8 +432,42 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
   // test) before landing this. Same invariance guarantee as every other
   // reordering fix in this file: only changes which equally-optimal
   // partition gets realized, never total value or item selection.
+  //
+  // 2026-08-15, same day, later: the `mandatoryRank` key above reopened
+  // exactly the invariant the 2026-08-04 `order` fix was written to
+  // guarantee — but only for the Elite-off case. `packBins()` only ever
+  // sets `it.mandatory = true` when Elite forces Buyer's Choice picks into
+  // the mandatory knapsack branch (`runOptimizer()`'s `mandatory =
+  // eligible.filter(l => l.buyersChoice)`); with Elite off, `packBins()` is
+  // always called with `mandatory: []`, so `mandatoryRank` silently became
+  // a no-op and the pre-bug-#5 crowding bug reappeared — even when Elite on
+  // vs off select the exact same items. Real report: a scope-out where
+  // `elite:'yes'` gave a clean Second/Crisp-Gallery host bag, but the same
+  // scope-out with `elite:'no'` put a First-floor stray back in the host
+  // bag, same $712,000 total, same items selected either way.
+  //
+  // Fixed by widening the key to `(it.mandatory || it.buyersChoice)`. This
+  // is a strict generalization, not a behavior change for Elite-on: every
+  // item `packBins()` ever marks `mandatory: true` is already
+  // `buyersChoice: true` by construction, so `it.mandatory` already implies
+  // `it.buyersChoice` and that path is bit-for-bit unaffected. Elite-off
+  // gains the missing case: a Buyer's-Choice-marked item that got selected
+  // by pure value-max now gets the same priority-pool precedence a
+  // forced-mandatory item would, closing the gap.
+  //
+  // Important scoping, discussed with the user before implementing: this
+  // only guarantees "same selected item set -> same bag split." It does
+  // NOT claim Elite on/off always produce identical splits, because they
+  // don't always select the same items — forcing a low value-density
+  // Buyer's Choice pick (e.g. a painting; every painting in this catalog is
+  // weight 50, the heaviest class, vs 10/20/30 for everything else) can
+  // cost enough value that the unconstrained Elite-off pack drops it for
+  // something better. When selection genuinely diverges, the two runs are
+  // packing different items and their splits are expected to differ too —
+  // that's not a regression. See the "diverging-selection sanity test" in
+  // test/pack-bins.test.js for the case where selection is NOT equal.
   const priorityRank = (it) => HOST_PRIORITY_FLOORS.has(it.floor) ? 0 : 1;
-  const mandatoryRank = (it) => it.mandatory ? 0 : 1;
+  const mandatoryRank = (it) => (it.mandatory || it.buyersChoice) ? 0 : 1;
   const floorSubRank = (it) => it.floor === 'Crisp Gallery' ? 0 : it.floor === 'Second' ? 1 : 2;
   items.sort((a, b) =>
     (priorityRank(a) - priorityRank(b)) ||
@@ -595,9 +629,14 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
   // bag partition for the same chosen items — see packBins()'s own comment
   // on the `order` field for the full writeup.
   const orderById = new Map(eligible.map((l, idx) => [l.itemId, idx]));
+  // 2026-08-15 (later fix): `buyersChoice` is threaded through here so
+  // `packBins()`'s `mandatoryRank` can see it even when Elite is off (see
+  // that function's doc comment for the full writeup) — without this, an
+  // item's priority-pool placement silently depended on whether Elite
+  // happened to be toggled on, not on the item's own identity.
   const toItem = (l) => {
     const cat = itemById(catalog, l.itemId);
-    return { id: l.itemId, value: Number(l.value), weightUnits: cat.weight, floor: cat.floor, order: orderById.get(l.itemId) };
+    return { id: l.itemId, value: Number(l.value), weightUnits: cat.weight, floor: cat.floor, order: orderById.get(l.itemId), buyersChoice: !!l.buyersChoice };
   };
 
   const bcValid = valid.filter(l => l.buyersChoice);

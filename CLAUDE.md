@@ -613,6 +613,33 @@ confirmation dialog on unlock.
   populates `order` from each item's position in the catalog-ordered
   `eligible` list, so reconstruction now always walks items in true
   catalog order regardless of which end up `mandatory` vs `optional`.
+  **Reopened 2026-08-15, same day as the `mandatoryRank` fix below, and
+  fixed again the same day:** `mandatoryRank` keyed its sort purely off
+  `it.mandatory` — but `packBins()` only ever sets `mandatory: true` when
+  Elite forces Buyer's Choice picks into the mandatory branch, so with
+  Elite off `mandatoryRank` silently went back to a no-op and the
+  pre-`mandatoryRank` crowding bug reappeared, even for an identical item
+  selection (real report: same $712,000 scope-out, clean Second/Crisp-
+  Gallery host bag with Elite on, a First-floor stray back in the host bag
+  with Elite off). Fixed by threading `buyersChoice` through `toItem()` in
+  `runOptimizer()` and widening the key to `(it.mandatory ||
+  it.buyersChoice)` — a strict generalization, since every item
+  `packBins()` ever marks `mandatory: true` is already `buyersChoice: true`
+  by construction, so the Elite-on path is provably unaffected and Elite-
+  off gains the missing protection. **Important scoping, discussed with the
+  user before implementing:** this invariant only claims "same selected
+  item set implies same bag split" — it does NOT claim Elite on/off always
+  select the same items. Forcing a low value-density Buyer's Choice pick
+  (e.g. a painting — every painting in this catalog is weight 50, the
+  heaviest class, vs 10/20/30 for everything else) can cost enough value
+  that the unconstrained Elite-off pack rationally drops it for something
+  better, in which case the two states select different items and their
+  splits are expected to differ too — not a regression, just two different
+  knapsack problems. `test/pack-bins.test.js` has one test for each regime:
+  a same-selection regression test (guarded by first asserting the
+  item-id sets are actually equal) and a diverging-selection sanity test
+  (guarded by asserting they're actually *not* equal, plus no overflow and
+  Elite-off's value never falling below Elite-on's).
 - **`compareCrewSizes()` (added 2026-08-04, two-column 2026-08-07) answers
   "would a different crew size pay more per player?"** for the loot values
   already entered — a supplementary panel on `guide.html`, never affecting
