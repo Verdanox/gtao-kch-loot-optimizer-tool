@@ -562,7 +562,11 @@ async function init(){
     const primaryData = await primaryRes.json();
     const lootData = await lootRes.json();
 
-    PRIMARY_TARGETS = primaryData.targets.slice().sort((a, b) => a.name.localeCompare(b.name));
+    // Sorted by value (most -> least valuable), matching index.html's
+    // dropdown order (2026-08-15) — this page never renders a picker off
+    // this array (calcPrimary() just looks the target up by id), but kept
+    // in sync so the two pages' identical fetch/sort code doesn't drift.
+    PRIMARY_TARGETS = primaryData.targets.slice().sort((a, b) => b.baseValue - a.baseValue);
     PRIMARY_MULTIPLIERS = primaryData.multipliers;
     LOOT_CATALOG = lootData.items;
     BAG_CAPACITY_PER_PLAYER = lootData.bagCapacityPerPlayer;

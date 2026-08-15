@@ -213,7 +213,13 @@ styling lives in `css/kch-styles.css`, linked from all three.
 - `data/primary-targets.json` — primary painting payouts. Only a base value is
   stored per painting; hard mode and first-week are the only two clean
   multipliers applied on top (see `_notes` in the file for the derived
-  formula and verification).
+  formula and verification). `index.html`'s Target dropdown (and
+  `guide.html`'s identical, duplicated data-loading code) sorts this list
+  by `baseValue` descending — most valuable first — rather than
+  alphabetically (2026-08-15, user request, easier to scan/compare at a
+  glance). Sorting by raw `baseValue` stays correct regardless of the
+  run's difficulty/weekly selection, since `calcPrimary()`'s multipliers
+  apply uniformly to every target.
 - `data/secondary-loot.json` — every scoutable secondary item, its floor
   location, and its bag-weight (0–100 scale, one bag = 100). Dollar values are
   NOT stored here — they're randomized per scope-out and entered by the user

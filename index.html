@@ -497,7 +497,12 @@ async function init(){
     const primaryData = await primaryRes.json();
     const lootData = await lootRes.json();
 
-    PRIMARY_TARGETS = primaryData.targets.slice().sort((a, b) => a.name.localeCompare(b.name));
+    // Sorted by value (most -> least valuable), not alphabetically
+    // (2026-08-15, user request) — the multiplied value's order is stable
+    // across difficulty/weekly since calcPrimary() applies the same
+    // multiplier to every target uniformly, so sorting by raw baseValue
+    // never disagrees with the actual payout order.
+    PRIMARY_TARGETS = primaryData.targets.slice().sort((a, b) => b.baseValue - a.baseValue);
     LOOT_CATALOG = lootData.items;
 
     loadPersisted();
