@@ -44,6 +44,14 @@
           <div class="toggle-btn" data-val="repeat">Repeat run</div>
         </div>
       </div>
+      <div style="margin-top:14px;">
+        <label class="field-label">Keep Primary?</label>
+        <div class="toggle-group" id="keepPrimaryToggle" style="max-width:280px;">
+          <div class="toggle-btn" data-val="no">No — sell it</div>
+          <div class="toggle-btn" data-val="yes">Yes — keep it</div>
+        </div>
+      </div>
+      <p class="hint">If you keep the painting to display instead of selling it, its value won't count toward Total Take, Payout, or Career Progress on the Heist Guide.</p>
       <p class="hint" id="primaryHint"></p>
     </div>
   </div>
@@ -179,6 +187,14 @@ function initSelects(){
       renderAll();
     });
   });
+  document.querySelectorAll('#keepPrimaryToggle .toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if (btn.classList.contains('disabled')) return; // mandatory story target must be sold — see renderPrimaryInfo()
+      state.keepPrimary = btn.dataset.val;
+      syncToggleGroup('keepPrimaryToggle', state.keepPrimary);
+      renderAll();
+    });
+  });
   document.querySelectorAll('#eliteToggle .toggle-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       state.elite = btn.dataset.val;
@@ -196,6 +212,7 @@ function initSelects(){
 
   syncToggleGroup('difficultyToggle', state.difficulty);
   syncToggleGroup('weeklyToggle', state.weekly);
+  syncToggleGroup('keepPrimaryToggle', state.keepPrimary);
   syncToggleGroup('eliteToggle', state.elite);
   syncCrewSelect();
 
@@ -250,6 +267,7 @@ function clearAll(){
   document.getElementById('primaryTarget').value = state.primaryId;
   syncToggleGroup('difficultyToggle', state.difficulty);
   syncToggleGroup('weeklyToggle', state.weekly);
+  syncToggleGroup('keepPrimaryToggle', state.keepPrimary);
   syncToggleGroup('eliteToggle', state.elite);
   syncCrewSelect();
   renderAll();
@@ -479,6 +497,20 @@ function renderPrimaryInfo(){
   document.getElementById('primaryHint').innerHTML = meta && meta.mandatory
     ? 'Mandatory story target — must be sold every run.'
     : 'Optional rotating painting — may be sold or displayed.';
+
+  // The mandatory story target can never be kept (it must be sold every
+  // run, per the hint above) — disable "Yes — keep it" and force
+  // keepPrimary back to 'no' if it was set while a different, optional
+  // target was selected. Real DOM elements, not <button disabled>, so
+  // the click guard below (not a native disabled state) is what actually
+  // blocks the click.
+  const keepYesBtn = document.querySelector('#keepPrimaryToggle .toggle-btn[data-val="yes"]');
+  const isMandatory = !!(meta && meta.mandatory);
+  keepYesBtn.classList.toggle('disabled', isMandatory);
+  if (isMandatory && state.keepPrimary === 'yes'){
+    state.keepPrimary = 'no';
+    syncToggleGroup('keepPrimaryToggle', state.keepPrimary);
+  }
 }
 
 function renderAll(fullLootRerender = true){
@@ -497,7 +529,12 @@ async function init(){
     const primaryData = await primaryRes.json();
     const lootData = await lootRes.json();
 
-    PRIMARY_TARGETS = primaryData.targets.slice().sort((a, b) => a.name.localeCompare(b.name));
+    // Sorted by value (most -> least valuable), not alphabetically
+    // (2026-08-15, user request) — the multiplied value's order is stable
+    // across difficulty/weekly since calcPrimary() applies the same
+    // multiplier to every target uniformly, so sorting by raw baseValue
+    // never disagrees with the actual payout order.
+    PRIMARY_TARGETS = primaryData.targets.slice().sort((a, b) => b.baseValue - a.baseValue);
     LOOT_CATALOG = lootData.items;
 
     loadPersisted();

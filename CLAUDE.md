@@ -62,6 +62,26 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   "by clicking the item" (user-requested addition) — the click target is
   the whole row/label, not a small checkbox, and that wasn't obvious from
   the text before.
+  **"Keep Primary?" toggle (2026-08-15, user request), Step 1.** Some
+  hosts keep the primary painting for display (arcade/property) instead
+  of selling it. A third toggle-group in Step 1 (`state.keepPrimary`,
+  `'no'`/`'yes'` — string-valued like every other toggle field here, not
+  a raw boolean), same visual pattern as the Elite Challenge toggle. Purely
+  a payout exclusion: nothing else in the tool changes (secondary loot,
+  bonuses, bag packing all untouched) — confirmed with the user this
+  doesn't map to any other mechanic. **Disabled for the mandatory story
+  target** (`la-derniere-debauche`) — `renderPrimaryInfo()` already told
+  the user "Mandatory story target — must be sold every run" before this
+  toggle existed, and letting "Keep Primary? Yes" coexist with that line
+  would contradict it, so selecting the mandatory target dims the "Yes"
+  option (`.toggle-btn.disabled` — a CSS/JS click-guard, not a native
+  `disabled` attribute, since these are `<div>`s) and force-resets
+  `keepPrimary` back to `'no'` if it was set while a different, optional
+  target was previously selected. See `guide.html` below for how `kept`
+  propagates to the actual totals.
+  Also **sorted by value, most → least valuable** (2026-08-15, user
+  request, replacing alphabetical) — see the `primary-targets.json` entry
+  under "Data model" below.
 - `guide.html` — Page 2, Heist Guide. The results/manifest screen, meant to
   be screenshotted or printed during the run. Top-to-bottom: a glass-cutter
   prep reminder banner (if applicable), the security-door-combination field
@@ -213,7 +233,13 @@ styling lives in `css/kch-styles.css`, linked from all three.
 - `data/primary-targets.json` — primary painting payouts. Only a base value is
   stored per painting; hard mode and first-week are the only two clean
   multipliers applied on top (see `_notes` in the file for the derived
-  formula and verification).
+  formula and verification). `index.html`'s Target dropdown (and
+  `guide.html`'s identical, duplicated data-loading code) sorts this list
+  by `baseValue` descending — most valuable first — rather than
+  alphabetically (2026-08-15, user request, easier to scan/compare at a
+  glance). Sorting by raw `baseValue` stays correct regardless of the
+  run's difficulty/weekly selection, since `calcPrimary()`'s multipliers
+  apply uniformly to every target.
 - `data/secondary-loot.json` — every scoutable secondary item, its floor
   location, and its bag-weight (0–100 scale, one bag = 100). Dollar values are
   NOT stored here — they're randomized per scope-out and entered by the user
@@ -339,8 +365,9 @@ host-routing tie-break behavior covered directly by
 `test/bin-packing.test.js` — not because Greedy is still on the roadmap.
 
 ## Persistence
-Page 1 inputs (primary target, difficulty, weekly status, players, loot
-values/Buyer's Choice flags, Elite toggle, player names) and Page 2's
+Page 1 inputs (primary target, difficulty, weekly status, players, keep-
+primary toggle, loot values/Buyer's Choice flags, Elite toggle, player
+names) and Page 2's
 `securityCombo` + `locked` fields all autosave to a single versioned
 `localStorage` key (`kch-loot-ledger:v1`) on every input/change event, and
 survive page refresh, closing/reopening the browser, and navigating
@@ -390,7 +417,8 @@ confirmation dialog on unlock.
   (rewritten 2026-08-02, extended 2026-08-03, widened 2026-08-04, Vault
   tier added 2026-08-07, priority-floor processing order fixed 2026-08-09,
   refined 2026-08-10, refined again 2026-08-13, Alarm Floor added to tier
-  0 2026-08-14): `packBins()`'s
+  0 2026-08-14, mandatory items given priority-pool precedence 2026-08-15):
+  `packBins()`'s
   reconstruction step chooses *which bin* an item lands in — never which
   items get chosen or the total secondary value — by, in order: (0) `Vault`
   and `Alarm Floor` items exclude the
@@ -498,6 +526,35 @@ confirmation dialog on unlock.
   among same-floor items of equal weight. Same invariance argument as the
   2026-08-09/2026-08-10 fixes: this only changes which equally-optimal
   partition gets realized, never the total value or item selection.
+  **Real bug fix, 2026-08-15:** even with same-floor ordering fixed, a
+  problem remained *across* the two priority floors specifically for
+  mandatory items. A real 2-player report (Elite on, Buyer's Choice:
+  Antique Rings, Coquard Bracelets, Horse Statue): four *optional* `Crisp
+  Gallery` items were walked largest-first (per the 2026-08-13 fix) and
+  greedily claimed 80 of the host's 100 capacity before the *mandatory*
+  `Second` item (Horse Statue, weight 30) ever got a turn — only 20
+  capacity remained, not enough for it, so it fell through to the
+  non-host player purely because of processing order, while the host's
+  leftover 10 capacity got backfilled by an unrelated `First`-floor item
+  (Antique Rings) on what turned out to be a capacity tie between the two
+  bags. Net result: the host bag carried a First-floor stray, and the
+  non-host player ended up spanning Loading Bay + Alarm Floor + Second +
+  First — a real cross-floor mishmash for both players. The user proposed
+  pooling `Second` and `Crisp Gallery` for host-bag capacity instead of
+  always ranking `Crisp Gallery` ahead of `Second`; a fully-flattened pool
+  (dropping the floor sub-rank entirely) was tested and rejected — it
+  broke the 2026-08-10 fix's own guarantee, letting a heavier optional
+  `Second` item beat a lighter optional `Crisp Gallery` item for the
+  host's last slot on a tie, reversing the EMP-desync rationale. Fixed
+  instead by layering in `mandatoryRank` *above* the floor sub-rank (still
+  gated to the priority pool, so it's a no-op elsewhere): a mandatory item
+  now claims host capacity ahead of any optional priority-floor item on
+  *either* floor. This only changes behavior when a mandatory and an
+  optional item are competing in the pool — optional-vs-optional ties
+  still fall through to the existing `Crisp Gallery`-over-`Second`
+  sub-rank unchanged. Same invariance argument as every fix above: only
+  changes which equally-optimal partition gets realized, never the total
+  value or item selection.
   (2) otherwise, prefer a bin that already contains an item on the same floor (general
   floor-clustering, so a crew spends less time running between floors);
   (3) otherwise, prefer a bin that already contains an item on an
@@ -672,6 +729,22 @@ confirmation dialog on unlock.
   (never an individual bag's value), `buyerRequestBonusEach`, and
   `helperBonusEach` for non-hosts, but never `eliteBonusEach` and never
   the repeat-run planning fee.
+- **"Keep Primary?" (`state.keepPrimary`, 2026-08-15) zeroes
+  `primary.value` at the single source, `calcPrimary()`, not at each
+  display/total site.** When `state.keepPrimary === 'yes'`, `calcPrimary()`
+  short-circuits past the multiplier math entirely and returns `{ value:
+  0, meta: p, kept: true }`. Every consumer of `primary.value` — the
+  Finale Result ledger's Primary Target and Total Take rows, the host's
+  player-card Primary Target row, `computeGuidePayout()`, and
+  `computeCareerProgress()` — already just reads that field, so zeroing it
+  once here is sufficient; **neither `computeGuidePayout()` nor
+  `computeCareerProgress()` needed any changes at all.** `guide.html`
+  reads the returned `kept` flag only for display, swapping the two
+  Primary Target rows (ledger + host card) to "Kept — not sold" instead of
+  a dollar figure, plus one small hint line under the ledger row
+  reiterating that it's excluded from Total Take/Payout below — see
+  `index.html`'s Step 1 entry above for the toggle itself and why it's
+  disabled for the mandatory story target.
 
 ## Known open questions (confirm before shipping)
 - The source payout table also included values for runs where witnesses/CCTV

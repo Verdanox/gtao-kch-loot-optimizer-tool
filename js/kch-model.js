@@ -53,14 +53,26 @@ export function bonusAmounts(difficulty, bonusConstants) {
 // a painting's base value. This affects primaryTarget.value only — never
 // secondary loot, which is always the actual randomized amount observed
 // in-game, regardless of difficulty.
+//
+// 2026-08-15: `state.keepPrimary === 'yes'` (some hosts keep the painting
+// for display — arcade/property — rather than selling it) short-circuits
+// straight to `value: 0`, skipping the multiplier math entirely. This is
+// the single source of truth for "kept" — every downstream consumer
+// (guide.html's Finale Result ledger, the host's player card, Total Take,
+// computeGuidePayout(), computeCareerProgress()) already just reads
+// `primary.value`, so zeroing it here is sufficient on its own; those
+// functions need no changes. The `kept` flag on the return value lets
+// callers show "Kept — not sold" instead of a dollar figure without
+// re-deriving the check from `state` themselves.
 export function calcPrimary(state, primaryTargets, primaryMultipliers) {
   const p = primaryTargets.find(t => t.id === state.primaryId);
+  if (state.keepPrimary === 'yes') return { value: 0, meta: p, kept: true };
   let base = p.baseValue;
   if (state.weekly === 'first') base *= primaryMultipliers.firstWeek;
   if (state.difficulty === 'hard') base *= primaryMultipliers.hard;
   // In-game payouts are whole dollars; round off float drift from the
   // multiplier math (e.g. 365000 * 1.10 === 401500.00000000006 in JS).
-  return { value: Math.round(base), meta: p };
+  return { value: Math.round(base), meta: p, kept: false };
 }
 
 // ---------- knapsack ----------
@@ -383,10 +395,49 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
   // either item is non-priority) so every other tier's behavior, and
   // every non-priority floor's processing order, is untouched. `order`
   // remains the final tiebreak within same-floor items of equal weight.
+  // 2026-08-15: within the priority pool itself, mandatory items now walk
+  // ahead of optional ones, regardless of which of the two priority floors
+  // they're on. Real bug report: a 2-player run where four *optional*
+  // Crisp Gallery items were walked (per the 2026-08-13 largest-first rule
+  // above) and greedily claimed 80 of the host's 100 capacity before a
+  // *mandatory* Second item (Horse Statue, weight 30) ever got a turn —
+  // only 20 capacity remained, not enough for it, so it was forced into
+  // the non-host bag purely because of processing order. The host's
+  // leftover 10 capacity then got backfilled by an unrelated First-floor
+  // item via tier 3's adjacency fallback, on what turned out to be a
+  // capacity tie between the two bags — a real cross-floor mishmash for
+  // both players, not a deliberate placement.
+  //
+  // The user proposed pooling Second and Crisp Gallery for host-bag
+  // capacity instead of always ranking Crisp Gallery ahead of Second.
+  // Tested (and rejected) fully flattening `floorSubRank` away: it broke
+  // the existing 'Crisp Gallery outranks Second when both compete for the
+  // host bin' test — a heavier optional Second item would beat a lighter
+  // optional Crisp Gallery item for the host's last slot, reversing the
+  // documented EMP-desync rationale (Crisp Gallery needs the host in-room
+  // to verify presence; Second's host-preference is only the softer
+  // "route happens to pass through" one). `floorSubRank` below is
+  // untouched, so that preference still holds for optional-vs-optional
+  // ties.
+  //
+  // Instead, `mandatoryRank` is layered in ABOVE `floorSubRank` (but still
+  // gated to `priorityRank(a) === 0`, so it's a no-op outside the priority
+  // pool): a mandatory item now claims host capacity before any optional
+  // priority-floor item gets a chance to crowd it out, on either floor.
+  // This only changes behavior when a mandatory and an optional item are
+  // both competing in the pool — optional-vs-optional ties still fall
+  // through to `floorSubRank` exactly as before. Verified against the
+  // full existing suite (96/96 unchanged, including the Crisp-Gallery-
+  // outranks-Second test and the 2026-08-13 largest-priority-floor-item
+  // test) before landing this. Same invariance guarantee as every other
+  // reordering fix in this file: only changes which equally-optimal
+  // partition gets realized, never total value or item selection.
   const priorityRank = (it) => HOST_PRIORITY_FLOORS.has(it.floor) ? 0 : 1;
+  const mandatoryRank = (it) => it.mandatory ? 0 : 1;
   const floorSubRank = (it) => it.floor === 'Crisp Gallery' ? 0 : it.floor === 'Second' ? 1 : 2;
   items.sort((a, b) =>
     (priorityRank(a) - priorityRank(b)) ||
+    (priorityRank(a) === 0 ? (mandatoryRank(a) - mandatoryRank(b)) : 0) ||
     (floorSubRank(a) - floorSubRank(b)) ||
     (priorityRank(a) === 0 ? (b.w - a.w) : 0) ||
     ((a.order ?? 0) - (b.order ?? 0))
@@ -806,6 +857,9 @@ export function defaultPage1State(catalog) {
     weekly: 'first',
     players: 1,
     elite: 'no',
+    // 2026-08-15: 'no'/'yes', matching the string-valued convention every
+    // other toggle field here uses (not a raw boolean) — see calcPrimary().
+    keepPrimary: 'no',
     playerNames: ['', '', '', ''],
     // `variant` is the optional cosmetic sub-type pick (see `variants` in
     // secondary-loot.json — only Gemstone has one today). Carried on every
@@ -827,6 +881,7 @@ export function serializeState(page1, page2) {
       weekly: page1.weekly,
       players: page1.players,
       elite: page1.elite,
+      keepPrimary: page1.keepPrimary === 'yes' ? 'yes' : 'no',
       playerNames: Array.isArray(page1.playerNames) ? page1.playerNames.slice(0, 4) : ['', '', '', ''],
       loot: (page1.loot || []).map(l => ({ itemId: l.itemId, value: l.value, buyersChoice: !!l.buyersChoice, variant: l.variant || '' }))
     },
@@ -859,6 +914,7 @@ export function deserializeState(rawJsonString, fallbackPage1, fallbackPage2) {
       weekly: parsed.page1.weekly === 'repeat' ? 'repeat' : 'first',
       players: validPlayers.includes(parsed.page1.players) ? parsed.page1.players : fallbackPage1.players,
       elite: parsed.page1.elite === 'yes' ? 'yes' : 'no',
+      keepPrimary: parsed.page1.keepPrimary === 'yes' ? 'yes' : 'no',
       playerNames: Array.isArray(parsed.page1.playerNames)
         ? [0, 1, 2, 3].map(i => typeof parsed.page1.playerNames[i] === 'string' ? parsed.page1.playerNames[i] : '')
         : fallbackPage1.playerNames,

@@ -45,6 +45,27 @@ test('normal-mode primary value differs from hard-mode (multiplier actually appl
   assert.equal(hard.value, 401500);
 });
 
+test('keepPrimary "yes" returns value 0 and kept: true, regardless of difficulty/weekly', () => {
+  const hard = calcPrimary(baseState({ difficulty: 'hard', weekly: 'first', keepPrimary: 'yes' }), primaryData.targets, primaryData.multipliers);
+  const normal = calcPrimary(baseState({ difficulty: 'normal', weekly: 'repeat', keepPrimary: 'yes' }), primaryData.targets, primaryData.multipliers);
+  assert.equal(hard.value, 0);
+  assert.equal(hard.kept, true);
+  assert.equal(normal.value, 0);
+  assert.equal(normal.kept, true);
+  // meta (the target's own record) is still populated even when kept —
+  // only .value is zeroed.
+  assert.ok(hard.meta && hard.meta.id === baseState({}).primaryId);
+});
+
+test('keepPrimary "no" (or unset) still returns the real computed value with kept: false', () => {
+  const explicit = calcPrimary(baseState({ keepPrimary: 'no' }), primaryData.targets, primaryData.multipliers);
+  const unset = calcPrimary(baseState({}), primaryData.targets, primaryData.multipliers);
+  assert.equal(explicit.value, 401500);
+  assert.equal(explicit.kept, false);
+  assert.equal(unset.value, 401500);
+  assert.equal(unset.kept, false);
+});
+
 test('secondary loot values never change with difficulty', () => {
   const normalState = baseState({ difficulty: 'normal' });
   const hardState = baseState({ difficulty: 'hard' });
