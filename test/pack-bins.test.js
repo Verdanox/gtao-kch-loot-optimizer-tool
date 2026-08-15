@@ -256,6 +256,87 @@ test('Crisp Gallery outranks Second when both compete for the host bin', () => {
   assert.notEqual(bagOf('S'), 0, 'Second should fall through to the non-host bag once Crisp Gallery has claimed the host\'s only available room');
 });
 
+// Regression coverage for a real 2026-08-15 bug report: four *optional*
+// Crisp Gallery items were walked (largest-first, per the 2026-08-13 fix)
+// and greedily claimed 80 of the host's 100 capacity before a *mandatory*
+// Second item (weight 30) ever got a turn — only 20 capacity remained, not
+// enough for it, so the mandatory item was forced into the non-host bag
+// purely because of processing order. Fixed by walking mandatory
+// priority-floor items ahead of optional ones in the same pool (see
+// packBins()'s `mandatoryRank`). M(30, Second, mandatory) plus four
+// optional Crisp Gallery items (30, 20, 20, 10 = 80) sum to exactly 110 —
+// can't all fit in one 100-capacity host bag, so something must fall
+// through. It must be one of the optional items, not the mandatory one.
+test('a mandatory priority-floor item claims host capacity ahead of optional priority-floor items on the OTHER priority floor', () => {
+  const mandatory = [
+    { id: 'M', value: 500, weightUnits: 30, floor: 'Second', order: 10 },
+  ];
+  const optional = [
+    { id: 'G1', value: 100, weightUnits: 30, floor: 'Crisp Gallery', order: 0 },
+    { id: 'G2', value: 100, weightUnits: 20, floor: 'Crisp Gallery', order: 1 },
+    { id: 'G3', value: 100, weightUnits: 20, floor: 'Crisp Gallery', order: 2 },
+    { id: 'G4', value: 100, weightUnits: 10, floor: 'Crisp Gallery', order: 3 },
+  ];
+  const result = packBins(mandatory, optional, 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.equal(bagOf('M'), 0, 'the mandatory Second item must land in the host bag, not be crowded out by optional Crisp Gallery items processed first');
+});
+
+// Guards the "reject full pooling" decision documented in packBins():
+// mandatoryRank must stay a no-op when neither competing item is
+// mandatory, so Crisp Gallery's stronger EMP-desync preference still wins
+// optional-vs-optional ties — this is the same scenario as 'Crisp Gallery
+// outranks Second when both compete for the host bin' above, asserted
+// again explicitly here so a future change to mandatoryRank's placement in
+// the sort can't silently re-break it without failing a test right next to
+// the fix that could cause it.
+test('mandatoryRank is a no-op between two optional priority-floor items — Crisp Gallery still outranks Second', () => {
+  const optional = [
+    { id: 'S', value: 100, weightUnits: 60, floor: 'Second', order: 0 },
+    { id: 'G', value: 100, weightUnits: 50, floor: 'Crisp Gallery', order: 1 },
+  ];
+  const result = packBins([], optional, 2, 100);
+  assert.ok(result);
+  const bagOf = (id) => result.bags.findIndex(b => b.items.some(i => i.id === id));
+  assert.equal(bagOf('G'), 0, 'Crisp Gallery should still claim the host bag over Second when neither item is mandatory');
+});
+
+// Full-catalog regression test replaying the real 2026-08-15 bug report
+// scope-out (2 players, Elite on, Buyer's Choice: Antique Rings (1-B),
+// Coquard Bracelets (2-D), Horse Statue (2-C)). Before this fix, the host
+// bag ended up with a First-floor stray (Antique Rings) mixed into an
+// otherwise Second/Crisp-Gallery bag, while Horse Statue (mandatory,
+// Second) fell through to the non-host player alongside Loading Bay, Alarm
+// Floor, and First — a 4-floor mishmash. After this fix, the host bag is
+// exactly Second + Crisp Gallery, with Horse Statue included.
+test('real 2026-08-15 scope-out: host bag is entirely Second/Crisp Gallery, no First-floor stray', () => {
+  const values = {
+    'B-A': 77500, 'B-B': 82500, 'B-D': 90000,
+    'BAY': 105000,
+    '0-A': 90000, '0-B': 50000,
+    '1-A': 56000, '1-B': 30000, '1-E': 112500, '1-F': 105000, '1-G': 115000,
+    '1-H': 107500, '1-I': 122500, '1-J': 122500, '1-K': 34000,
+    '2-C': 97500, '2-D': 34000,
+    '2-E': 152500, '2-F': 150000, '2-G': 76000, '2-H': 112500, '2-I': 90000, '2-J': 43000,
+    '2-L': 112500, '2-M': 112500,
+  };
+  const bcIds = new Set(['1-B', '2-C', '2-D']); // Antique Rings, Horse Statue, Coquard Bracelets
+  const loot = catalog.map(cat => ({
+    itemId: cat.itemId,
+    value: Object.prototype.hasOwnProperty.call(values, cat.itemId) ? values[cat.itemId] : '',
+    buyersChoice: bcIds.has(cat.itemId)
+  }));
+  const state = { primaryId: 'x', difficulty: 'normal', weekly: 'no', players: 2, elite: 'yes', loot };
+  const result = runOptimizer(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+
+  assert.equal(result.secondaryBagValue, 712000, 'total secondary value is unaffected by routing');
+  const hostFloors = new Set(result.bags[0].items.map(i => i.floor));
+  assert.deepEqual(hostFloors, new Set(['Second', 'Crisp Gallery']), 'host bag should be entirely Second/Crisp Gallery — no First-floor detour needed');
+  const hostIds = result.bags[0].items.map(i => i.itemId);
+  assert.ok(hostIds.includes('2-C'), 'the mandatory Horse Statue should land in the host bag, not be crowded out by optional Crisp Gallery items');
+});
+
 test('Vault items exclude the host bag but still floor-cluster together via tier 2', () => {
   // A is mandatory Vault — tier 0 forces it away from bin 0 (host) into
   // bin 1, since bin 1 is a value-preserving alternative. V shares A's

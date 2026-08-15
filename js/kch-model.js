@@ -383,10 +383,49 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
   // either item is non-priority) so every other tier's behavior, and
   // every non-priority floor's processing order, is untouched. `order`
   // remains the final tiebreak within same-floor items of equal weight.
+  // 2026-08-15: within the priority pool itself, mandatory items now walk
+  // ahead of optional ones, regardless of which of the two priority floors
+  // they're on. Real bug report: a 2-player run where four *optional*
+  // Crisp Gallery items were walked (per the 2026-08-13 largest-first rule
+  // above) and greedily claimed 80 of the host's 100 capacity before a
+  // *mandatory* Second item (Horse Statue, weight 30) ever got a turn —
+  // only 20 capacity remained, not enough for it, so it was forced into
+  // the non-host bag purely because of processing order. The host's
+  // leftover 10 capacity then got backfilled by an unrelated First-floor
+  // item via tier 3's adjacency fallback, on what turned out to be a
+  // capacity tie between the two bags — a real cross-floor mishmash for
+  // both players, not a deliberate placement.
+  //
+  // The user proposed pooling Second and Crisp Gallery for host-bag
+  // capacity instead of always ranking Crisp Gallery ahead of Second.
+  // Tested (and rejected) fully flattening `floorSubRank` away: it broke
+  // the existing 'Crisp Gallery outranks Second when both compete for the
+  // host bin' test — a heavier optional Second item would beat a lighter
+  // optional Crisp Gallery item for the host's last slot, reversing the
+  // documented EMP-desync rationale (Crisp Gallery needs the host in-room
+  // to verify presence; Second's host-preference is only the softer
+  // "route happens to pass through" one). `floorSubRank` below is
+  // untouched, so that preference still holds for optional-vs-optional
+  // ties.
+  //
+  // Instead, `mandatoryRank` is layered in ABOVE `floorSubRank` (but still
+  // gated to `priorityRank(a) === 0`, so it's a no-op outside the priority
+  // pool): a mandatory item now claims host capacity before any optional
+  // priority-floor item gets a chance to crowd it out, on either floor.
+  // This only changes behavior when a mandatory and an optional item are
+  // both competing in the pool — optional-vs-optional ties still fall
+  // through to `floorSubRank` exactly as before. Verified against the
+  // full existing suite (96/96 unchanged, including the Crisp-Gallery-
+  // outranks-Second test and the 2026-08-13 largest-priority-floor-item
+  // test) before landing this. Same invariance guarantee as every other
+  // reordering fix in this file: only changes which equally-optimal
+  // partition gets realized, never total value or item selection.
   const priorityRank = (it) => HOST_PRIORITY_FLOORS.has(it.floor) ? 0 : 1;
+  const mandatoryRank = (it) => it.mandatory ? 0 : 1;
   const floorSubRank = (it) => it.floor === 'Crisp Gallery' ? 0 : it.floor === 'Second' ? 1 : 2;
   items.sort((a, b) =>
     (priorityRank(a) - priorityRank(b)) ||
+    (priorityRank(a) === 0 ? (mandatoryRank(a) - mandatoryRank(b)) : 0) ||
     (floorSubRank(a) - floorSubRank(b)) ||
     (priorityRank(a) === 0 ? (b.w - a.w) : 0) ||
     ((a.order ?? 0) - (b.order ?? 0))

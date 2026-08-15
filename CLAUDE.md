@@ -390,7 +390,8 @@ confirmation dialog on unlock.
   (rewritten 2026-08-02, extended 2026-08-03, widened 2026-08-04, Vault
   tier added 2026-08-07, priority-floor processing order fixed 2026-08-09,
   refined 2026-08-10, refined again 2026-08-13, Alarm Floor added to tier
-  0 2026-08-14): `packBins()`'s
+  0 2026-08-14, mandatory items given priority-pool precedence 2026-08-15):
+  `packBins()`'s
   reconstruction step chooses *which bin* an item lands in — never which
   items get chosen or the total secondary value — by, in order: (0) `Vault`
   and `Alarm Floor` items exclude the
@@ -498,6 +499,35 @@ confirmation dialog on unlock.
   among same-floor items of equal weight. Same invariance argument as the
   2026-08-09/2026-08-10 fixes: this only changes which equally-optimal
   partition gets realized, never the total value or item selection.
+  **Real bug fix, 2026-08-15:** even with same-floor ordering fixed, a
+  problem remained *across* the two priority floors specifically for
+  mandatory items. A real 2-player report (Elite on, Buyer's Choice:
+  Antique Rings, Coquard Bracelets, Horse Statue): four *optional* `Crisp
+  Gallery` items were walked largest-first (per the 2026-08-13 fix) and
+  greedily claimed 80 of the host's 100 capacity before the *mandatory*
+  `Second` item (Horse Statue, weight 30) ever got a turn — only 20
+  capacity remained, not enough for it, so it fell through to the
+  non-host player purely because of processing order, while the host's
+  leftover 10 capacity got backfilled by an unrelated `First`-floor item
+  (Antique Rings) on what turned out to be a capacity tie between the two
+  bags. Net result: the host bag carried a First-floor stray, and the
+  non-host player ended up spanning Loading Bay + Alarm Floor + Second +
+  First — a real cross-floor mishmash for both players. The user proposed
+  pooling `Second` and `Crisp Gallery` for host-bag capacity instead of
+  always ranking `Crisp Gallery` ahead of `Second`; a fully-flattened pool
+  (dropping the floor sub-rank entirely) was tested and rejected — it
+  broke the 2026-08-10 fix's own guarantee, letting a heavier optional
+  `Second` item beat a lighter optional `Crisp Gallery` item for the
+  host's last slot on a tie, reversing the EMP-desync rationale. Fixed
+  instead by layering in `mandatoryRank` *above* the floor sub-rank (still
+  gated to the priority pool, so it's a no-op elsewhere): a mandatory item
+  now claims host capacity ahead of any optional priority-floor item on
+  *either* floor. This only changes behavior when a mandatory and an
+  optional item are competing in the pool — optional-vs-optional ties
+  still fall through to the existing `Crisp Gallery`-over-`Second`
+  sub-rank unchanged. Same invariance argument as every fix above: only
+  changes which equally-optimal partition gets realized, never the total
+  value or item selection.
   (2) otherwise, prefer a bin that already contains an item on the same floor (general
   floor-clustering, so a crew spends less time running between floors);
   (3) otherwise, prefer a bin that already contains an item on an
