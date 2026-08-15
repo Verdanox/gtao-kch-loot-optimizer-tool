@@ -62,6 +62,26 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   "by clicking the item" (user-requested addition) — the click target is
   the whole row/label, not a small checkbox, and that wasn't obvious from
   the text before.
+  **"Keep Primary?" toggle (2026-08-15, user request), Step 1.** Some
+  hosts keep the primary painting for display (arcade/property) instead
+  of selling it. A third toggle-group in Step 1 (`state.keepPrimary`,
+  `'no'`/`'yes'` — string-valued like every other toggle field here, not
+  a raw boolean), same visual pattern as the Elite Challenge toggle. Purely
+  a payout exclusion: nothing else in the tool changes (secondary loot,
+  bonuses, bag packing all untouched) — confirmed with the user this
+  doesn't map to any other mechanic. **Disabled for the mandatory story
+  target** (`la-derniere-debauche`) — `renderPrimaryInfo()` already told
+  the user "Mandatory story target — must be sold every run" before this
+  toggle existed, and letting "Keep Primary? Yes" coexist with that line
+  would contradict it, so selecting the mandatory target dims the "Yes"
+  option (`.toggle-btn.disabled` — a CSS/JS click-guard, not a native
+  `disabled` attribute, since these are `<div>`s) and force-resets
+  `keepPrimary` back to `'no'` if it was set while a different, optional
+  target was previously selected. See `guide.html` below for how `kept`
+  propagates to the actual totals.
+  Also **sorted by value, most → least valuable** (2026-08-15, user
+  request, replacing alphabetical) — see the `primary-targets.json` entry
+  under "Data model" below.
 - `guide.html` — Page 2, Heist Guide. The results/manifest screen, meant to
   be screenshotted or printed during the run. Top-to-bottom: a glass-cutter
   prep reminder banner (if applicable), the security-door-combination field
@@ -345,8 +365,9 @@ host-routing tie-break behavior covered directly by
 `test/bin-packing.test.js` — not because Greedy is still on the roadmap.
 
 ## Persistence
-Page 1 inputs (primary target, difficulty, weekly status, players, loot
-values/Buyer's Choice flags, Elite toggle, player names) and Page 2's
+Page 1 inputs (primary target, difficulty, weekly status, players, keep-
+primary toggle, loot values/Buyer's Choice flags, Elite toggle, player
+names) and Page 2's
 `securityCombo` + `locked` fields all autosave to a single versioned
 `localStorage` key (`kch-loot-ledger:v1`) on every input/change event, and
 survive page refresh, closing/reopening the browser, and navigating
@@ -708,6 +729,22 @@ confirmation dialog on unlock.
   (never an individual bag's value), `buyerRequestBonusEach`, and
   `helperBonusEach` for non-hosts, but never `eliteBonusEach` and never
   the repeat-run planning fee.
+- **"Keep Primary?" (`state.keepPrimary`, 2026-08-15) zeroes
+  `primary.value` at the single source, `calcPrimary()`, not at each
+  display/total site.** When `state.keepPrimary === 'yes'`, `calcPrimary()`
+  short-circuits past the multiplier math entirely and returns `{ value:
+  0, meta: p, kept: true }`. Every consumer of `primary.value` — the
+  Finale Result ledger's Primary Target and Total Take rows, the host's
+  player-card Primary Target row, `computeGuidePayout()`, and
+  `computeCareerProgress()` — already just reads that field, so zeroing it
+  once here is sufficient; **neither `computeGuidePayout()` nor
+  `computeCareerProgress()` needed any changes at all.** `guide.html`
+  reads the returned `kept` flag only for display, swapping the two
+  Primary Target rows (ledger + host card) to "Kept — not sold" instead of
+  a dollar figure, plus one small hint line under the ledger row
+  reiterating that it's excluded from Total Take/Payout below — see
+  `index.html`'s Step 1 entry above for the toggle itself and why it's
+  disabled for the mandatory story target.
 
 ## Known open questions (confirm before shipping)
 - The source payout table also included values for runs where witnesses/CCTV

@@ -53,14 +53,26 @@ export function bonusAmounts(difficulty, bonusConstants) {
 // a painting's base value. This affects primaryTarget.value only — never
 // secondary loot, which is always the actual randomized amount observed
 // in-game, regardless of difficulty.
+//
+// 2026-08-15: `state.keepPrimary === 'yes'` (some hosts keep the painting
+// for display — arcade/property — rather than selling it) short-circuits
+// straight to `value: 0`, skipping the multiplier math entirely. This is
+// the single source of truth for "kept" — every downstream consumer
+// (guide.html's Finale Result ledger, the host's player card, Total Take,
+// computeGuidePayout(), computeCareerProgress()) already just reads
+// `primary.value`, so zeroing it here is sufficient on its own; those
+// functions need no changes. The `kept` flag on the return value lets
+// callers show "Kept — not sold" instead of a dollar figure without
+// re-deriving the check from `state` themselves.
 export function calcPrimary(state, primaryTargets, primaryMultipliers) {
   const p = primaryTargets.find(t => t.id === state.primaryId);
+  if (state.keepPrimary === 'yes') return { value: 0, meta: p, kept: true };
   let base = p.baseValue;
   if (state.weekly === 'first') base *= primaryMultipliers.firstWeek;
   if (state.difficulty === 'hard') base *= primaryMultipliers.hard;
   // In-game payouts are whole dollars; round off float drift from the
   // multiplier math (e.g. 365000 * 1.10 === 401500.00000000006 in JS).
-  return { value: Math.round(base), meta: p };
+  return { value: Math.round(base), meta: p, kept: false };
 }
 
 // ---------- knapsack ----------
@@ -845,6 +857,9 @@ export function defaultPage1State(catalog) {
     weekly: 'first',
     players: 1,
     elite: 'no',
+    // 2026-08-15: 'no'/'yes', matching the string-valued convention every
+    // other toggle field here uses (not a raw boolean) — see calcPrimary().
+    keepPrimary: 'no',
     playerNames: ['', '', '', ''],
     // `variant` is the optional cosmetic sub-type pick (see `variants` in
     // secondary-loot.json — only Gemstone has one today). Carried on every
@@ -866,6 +881,7 @@ export function serializeState(page1, page2) {
       weekly: page1.weekly,
       players: page1.players,
       elite: page1.elite,
+      keepPrimary: page1.keepPrimary === 'yes' ? 'yes' : 'no',
       playerNames: Array.isArray(page1.playerNames) ? page1.playerNames.slice(0, 4) : ['', '', '', ''],
       loot: (page1.loot || []).map(l => ({ itemId: l.itemId, value: l.value, buyersChoice: !!l.buyersChoice, variant: l.variant || '' }))
     },
@@ -898,6 +914,7 @@ export function deserializeState(rawJsonString, fallbackPage1, fallbackPage2) {
       weekly: parsed.page1.weekly === 'repeat' ? 'repeat' : 'first',
       players: validPlayers.includes(parsed.page1.players) ? parsed.page1.players : fallbackPage1.players,
       elite: parsed.page1.elite === 'yes' ? 'yes' : 'no',
+      keepPrimary: parsed.page1.keepPrimary === 'yes' ? 'yes' : 'no',
       playerNames: Array.isArray(parsed.page1.playerNames)
         ? [0, 1, 2, 3].map(i => typeof parsed.page1.playerNames[i] === 'string' ? parsed.page1.playerNames[i] : '')
         : fallbackPage1.playerNames,

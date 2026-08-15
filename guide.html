@@ -336,7 +336,14 @@ function renderPayoutSection(primary, r){
   const ledger = document.getElementById('totalsLedger');
   ledger.innerHTML = '';
 
-  addLedgerRow(ledger, 'Primary Target', money(primary.value));
+  addLedgerRow(ledger, 'Primary Target', primary.kept ? 'Kept — not sold' : money(primary.value));
+  if (primary.kept){
+    const keptNote = document.createElement('p');
+    keptNote.className = 'hint';
+    keptNote.style.margin = '4px 0 0';
+    keptNote.textContent = 'Kept for display, not sold — excluded from Total Take and Payout below.';
+    ledger.appendChild(keptNote);
+  }
   addLedgerRow(ledger, 'Secondary Targets (optimized bag)', money(r.secondaryBagValue));
   // A combined "Total Take (Career Progress)" crew-wide headline was
   // removed 2026-07-26 as actively misleading (secondaryBagValue is the
@@ -411,7 +418,7 @@ function renderPayoutSection(primary, r){
     if (isHost){
       const primaryRow = document.createElement('div');
       primaryRow.className = 'ledger-row';
-      primaryRow.innerHTML = `<span class="k">Primary Target</span><span class="v">${money(primary.value)}</span>`;
+      primaryRow.innerHTML = `<span class="k">Primary Target</span><span class="v">${primary.kept ? 'Kept — not sold' : money(primary.value)}</span>`;
       card.appendChild(primaryRow);
       // The repeat-run planning fee is deliberately NOT shown on this
       // card — it's paid up front to set up a repeat run, a sunk cost

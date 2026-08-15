@@ -19,6 +19,7 @@ test('serialize/deserialize round-trips a full page1+page2 state', () => {
     weekly: 'repeat',
     players: 3,
     elite: 'yes',
+    keepPrimary: 'yes',
     playerNames: ['Franklin', 'Lamar', '', ''],
     loot: catalog.map((cat, i) => ({ itemId: cat.itemId, value: i < 2 ? 50000 : '', buyersChoice: i === 0 }))
   };
@@ -38,12 +39,18 @@ test('serialize/deserialize round-trips a full page1+page2 state', () => {
   assert.equal(outPage1.weekly, 'repeat');
   assert.equal(outPage1.players, 3);
   assert.equal(outPage1.elite, 'yes');
+  assert.equal(outPage1.keepPrimary, 'yes');
   assert.deepEqual(outPage1.playerNames, ['Franklin', 'Lamar', '', '']);
   assert.equal(outPage1.loot.length, catalog.length);
   assert.equal(outPage1.loot[0].value, 50000);
   assert.equal(outPage1.loot[0].buyersChoice, true);
   assert.equal(outPage2.securityCombo, '4-1-3-2');
   assert.equal(outPage2.locked, true);
+});
+
+test('defaultPage1State defaults keepPrimary to "no" (sell it)', () => {
+  const defaults1 = defaultPage1State(catalog);
+  assert.equal(defaults1.keepPrimary, 'no');
 });
 
 test('defaultPage2State starts unlocked, and locked survives a false round-trip too', () => {

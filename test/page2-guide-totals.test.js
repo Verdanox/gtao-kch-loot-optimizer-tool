@@ -29,6 +29,38 @@ function stateForPlayers(players) {
   };
 }
 
+// Regression test for the 2026-08-15 "Keep Primary?" feature: when kept,
+// calcPrimary() zeroes primary.value (see its own doc comment), which
+// should be sufficient on its own to exclude it from every downstream
+// total — computeGuidePayout() and computeCareerProgress() need no
+// changes at all. Confirms the host's numbers actually come out identical
+// to what they'd be with primaryValue explicitly forced to 0.
+test('keepPrimary excludes the primary entirely from host Payout and Career Progress', () => {
+  const players = 3;
+  const state = { ...stateForPlayers(players), keepPrimary: 'yes' };
+  const primary = calcPrimary(state, primaryData.targets, primaryData.multipliers);
+  const r = runOptimizer(state, catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+
+  assert.equal(primary.value, 0, 'sanity: calcPrimary should zero the value when kept');
+  assert.equal(primary.kept, true);
+
+  const hostPayout = computeGuidePayout({
+    secondaryShareEach: r.secondaryShareEach,
+    isHost: true,
+    primaryValue: primary.value,
+    buyerRequestBonusEach: r.buyerRequestBonusEach,
+    helperBonusEach: r.helperBonusEach
+  });
+  assert.equal(hostPayout, r.secondaryShareEach + r.buyerRequestBonusEach, 'host Payout should be exactly the secondary share + Buyer\'s Request, with nothing added for the kept primary');
+
+  const hostCareerProgress = computeCareerProgress({
+    secondaryShareEach: r.secondaryShareEach,
+    isHost: true,
+    primaryValue: primary.value
+  });
+  assert.equal(hostCareerProgress, r.secondaryShareEach, 'host Career Progress should be exactly the secondary share, with nothing added for the kept primary');
+});
+
 // Regression test for the Elite-bonus-exclusion gotcha: Page 2's per-player
 // "Payout" must equal secondaryShareEach (+ primary for the host, + the
 // Helper bonus for non-hosts) + the Buyer's Request bonus ONLY. It must NOT

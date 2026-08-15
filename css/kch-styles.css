@@ -177,6 +177,11 @@ select:focus, input:focus{border-color:var(--gold);}
   color:var(--bg);
   font-weight:600;
 }
+/* Not a native disabled control (these are divs, not buttons) — the click
+   guard lives in JS. Used for "Keep Primary?"'s Yes option, which isn't a
+   valid choice while the mandatory story target is selected. */
+.toggle-btn.disabled{opacity:.4; cursor:not-allowed;}
+.toggle-btn.disabled:hover{border-color:var(--line);}
 
 .crew-select{display:flex; gap:8px;}
 .crew-opt{
