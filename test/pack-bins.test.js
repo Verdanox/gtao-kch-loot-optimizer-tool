@@ -337,6 +337,98 @@ test('real 2026-08-15 scope-out: host bag is entirely Second/Crisp Gallery, no F
   assert.ok(hostIds.includes('2-C'), 'the mandatory Horse Statue should land in the host bag, not be crowded out by optional Crisp Gallery items');
 });
 
+// 2026-08-15, same day, later: real report that the fix above only held
+// with Elite toggled on. Root cause: mandatoryRank keyed off `it.mandatory`,
+// which packBins() only ever sets when Elite forces Buyer's Choice picks
+// into the mandatory branch — with Elite off, mandatoryRank silently became
+// a no-op and the pre-fix crowding bug came back, even for an identical
+// item selection. Fixed by widening the key to
+// `(it.mandatory || it.buyersChoice)`. This test replays the exact same
+// scope-out as the test above but through BOTH Elite states, guarded the
+// way discussed with the user: first confirm this scope-out is in the
+// "same items selected either way" regime (it is — Buyer's Choice items
+// here are already part of the optimal unconstrained pack), THEN assert
+// the bag split itself is identical. See the next test for the case where
+// selection genuinely diverges, where split-equality is not expected.
+test('bag split for this scope-out is identical whether Elite is on or off (same items selected either way)', () => {
+  const values = {
+    'B-A': 77500, 'B-B': 82500, 'B-D': 90000,
+    'BAY': 105000,
+    '0-A': 90000, '0-B': 50000,
+    '1-A': 56000, '1-B': 30000, '1-E': 112500, '1-F': 105000, '1-G': 115000,
+    '1-H': 107500, '1-I': 122500, '1-J': 122500, '1-K': 34000,
+    '2-C': 97500, '2-D': 34000,
+    '2-E': 152500, '2-F': 150000, '2-G': 76000, '2-H': 112500, '2-I': 90000, '2-J': 43000,
+    '2-L': 112500, '2-M': 112500,
+  };
+  const bcIds = new Set(['1-B', '2-C', '2-D']); // Antique Rings, Horse Statue, Coquard Bracelets
+  const baseLoot = catalog.map(cat => ({
+    itemId: cat.itemId,
+    value: Object.prototype.hasOwnProperty.call(values, cat.itemId) ? values[cat.itemId] : '',
+    buyersChoice: bcIds.has(cat.itemId)
+  }));
+  const stateFor = (elite) => ({ primaryId: 'x', difficulty: 'normal', weekly: 'no', players: 2, elite, loot: baseLoot });
+
+  const eliteOn = runOptimizer(stateFor('yes'), catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  const eliteOff = runOptimizer(stateFor('no'), catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+
+  const idsOf = (result) => result.bags.flatMap(b => b.items.map(i => i.itemId)).sort().join(',');
+  assert.equal(idsOf(eliteOn), idsOf(eliteOff), 'sanity check: this fixture must select the same items either way for a split-equality assertion to mean anything');
+  assert.equal(eliteOn.secondaryBagValue, 712000);
+  assert.equal(eliteOn.secondaryBagValue, eliteOff.secondaryBagValue);
+
+  const bagShapeOf = (result) => result.bags.map(b => b.items.map(i => i.itemId).sort().join(','));
+  assert.deepEqual(bagShapeOf(eliteOn), bagShapeOf(eliteOff), 'per-bag item assignment must be identical whether Elite is on or off, matching the same-scope-out test above');
+
+  for (const result of [eliteOn, eliteOff]) {
+    const hostFloors = new Set(result.bags[0].items.map(i => i.floor));
+    assert.deepEqual(hostFloors, new Set(['Second', 'Crisp Gallery']), 'host bag should be entirely Second/Crisp Gallery regardless of Elite status');
+    assert.ok(result.bags[0].items.map(i => i.itemId).includes('2-C'), 'mandatory Horse Statue must land in the host bag regardless of Elite status');
+  }
+});
+
+// Companion sanity test: when Elite forces a genuinely low value-density
+// Buyer's Choice pick (a painting — every painting in this catalog is
+// weight 50, the heaviest class, vs 10/20/30 for everything else), the
+// unconstrained Elite-off pack can rationally drop it for better-density
+// items instead. The two Elite states then select DIFFERENT items, and
+// their bag splits are expected to differ too — that's not a regression,
+// it's two different knapsack problems. This test deliberately does NOT
+// assert split-equality; it only guards that nothing degenerate happens:
+// no overflow, and Elite-off's value is never lower than Elite-on's
+// (forcing a suboptimal item in can only cost value or break even).
+test('diverging selection: Elite forcing a low-density painting pick costs value and selects different items than Elite off, without any overflow', () => {
+  const values = {
+    '1-E': 40000,                 // painting, weight 50 -- BC pick, deliberately low value/weight
+    '1-K': 60000,                 // weight 10 -- second BC pick, needed to reach the >=2-picks "attempted" threshold
+    '0-B': 120000, '1-A': 120000, // weight 20 each, high density
+    '0-C': 60000, '1-B': 60000, '1-C': 60000, '1-D': 60000, '1-L': 60000, // weight 10 each, high density
+  };
+  const bcIds = new Set(['1-E', '1-K']);
+  const baseLoot = catalog.map(cat => ({
+    itemId: cat.itemId,
+    value: Object.prototype.hasOwnProperty.call(values, cat.itemId) ? values[cat.itemId] : '',
+    buyersChoice: bcIds.has(cat.itemId)
+  }));
+  const stateFor = (elite) => ({ primaryId: 'x', difficulty: 'normal', weekly: 'no', players: 1, elite, loot: baseLoot });
+
+  const eliteOn = runOptimizer(stateFor('yes'), catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  const eliteOff = runOptimizer(stateFor('no'), catalog, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+
+  const idsOf = (result) => result.bags.flatMap(b => b.items.map(i => i.itemId)).sort().join(',');
+  assert.notEqual(idsOf(eliteOn), idsOf(eliteOff), 'sanity check: this fixture must actually exercise the diverging-selection regime, not converge like the test above');
+  assert.ok(idsOf(eliteOn).includes('1-E'), 'Elite on should force the painting in');
+  assert.ok(!idsOf(eliteOff).includes('1-E'), 'Elite off should rationally drop the low-density painting for better items');
+
+  for (const result of [eliteOn, eliteOff]) {
+    for (const bag of result.bags) {
+      const weight = bag.items.reduce((s, i) => s + catalog.find(c => c.itemId === i.itemId).weight, 0);
+      assert.ok(weight <= BAG_CAPACITY_PER_PLAYER, `bag must not overflow capacity (${weight} <= ${BAG_CAPACITY_PER_PLAYER})`);
+    }
+  }
+  assert.ok(eliteOff.secondaryBagValue >= eliteOn.secondaryBagValue, 'forcing a suboptimal item in can only cost value or break even, never gain it');
+});
+
 test('Vault items exclude the host bag but still floor-cluster together via tier 2', () => {
   // A is mandatory Vault — tier 0 forces it away from bin 0 (host) into
   // bin 1, since bin 1 is a value-preserving alternative. V shares A's
