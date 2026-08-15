@@ -224,7 +224,18 @@ select:focus, input:focus{border-color:var(--gold);}
 .loot-item.chk-b{background:var(--panel-3);}
 .loot-item.bc-active{background:rgba(201,162,75,0.16); border-color:var(--gold-dim);}
 .loot-item.bc-active .loot-name{color:var(--gold);}
-.loot-item.bc-locked{opacity:.55; cursor:not-allowed;}
+/* 2026-08-15: dropped the row-wide opacity fade this class used to carry
+   (`opacity:.55; cursor:not-allowed;`) — user feedback: once 3 Buyer's
+   Choice items are picked, dimming every OTHER row's entire content
+   (including the still-editable value input) hurt legibility for
+   unrelated items you're still typing values into. The BC checkbox stays
+   functionally disabled (bcCheck.disabled = maxedOut in index.html) and
+   the row is still fully interactive for its value input — only the BC
+   pick itself is blocked, so a row-wide "locked" look was never quite
+   accurate anyway. The `.bc-active` gold highlight above is sufficient on
+   its own to communicate "these 3 are picked"; no counter-signal is
+   needed on the rest. The class itself is kept (still gates the "BC"
+   badge's cursor below) — only this dimming rule is gone. */
 .loot-name{flex:1; min-width:0; font-size:12.5px; line-height:1.3; color:var(--text);}
 .item-desc{color:var(--muted); font-family:var(--mono); font-size:11px;}
 /* Per-run variant pick (the Gemstone's type today) — same slot as

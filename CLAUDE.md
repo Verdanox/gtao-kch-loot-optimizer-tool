@@ -314,6 +314,13 @@ styling lives in `css/kch-styles.css`, linked from all three.
     target (a `<label>` wrapping a visually-hidden checkbox, per-item
     `aria-label`) — not just a small checkbox — while the value input (and
     BAY's own checkbox) remain independently clickable/typeable inside it.
+    Once 3 items are marked, every other row's BC checkbox is disabled
+    (blocking a 4th pick) but the row itself is **not** dimmed
+    (2026-08-15, dropped `.bc-locked`'s `opacity:.55` — user feedback: it
+    faded the still-editable value input on unrelated rows too, hurting
+    legibility for items you're actively typing values into). The 3
+    picked rows' existing `.bc-active` gold highlight is the only visual
+    signal now; no counter-signal on the rest.
   - **`floorMaps` (top-level, not per-item) + per-item `xPct`/`yPct`** —
     data backing `map-view.html`'s "Floor Maps" section (see "Pages"
     above — this section lives on `map-view.html`, not `guide.html`).
