@@ -9,8 +9,8 @@ function loadJSON(relUrl) {
 
 const catalog = loadJSON('../data/secondary-loot.json').items;
 
-// Reminder-only check (not gating): the four glass-cutter items are
-// 0-A, 2-B, 2-C, 2-K.
+// Reminder-only check (not gating): the five glass-cutter items are
+// 0-A, 2-B, 2-C, 2-H, 2-K.
 test('flags only the glass-cutter items that are actually in chosenIds, not the whole catalog', () => {
   const chosenIds = new Set(['0-A', '1-A', '2-K']); // one non-gated item mixed in
   const flagged = packedPrepWarnings(catalog, chosenIds);
@@ -30,8 +30,8 @@ test('returns an empty list when a gated item exists but was not chosen', () => 
   assert.deepEqual(flagged, []);
 });
 
-test('all four documented glass-cutter items carry the metadata', () => {
-  for (const id of ['0-A', '2-B', '2-C', '2-K']) {
+test('all five documented glass-cutter items carry the metadata', () => {
+  for (const id of ['0-A', '2-B', '2-C', '2-H', '2-K']) {
     const cat = catalog.find(c => c.itemId === id);
     assert.ok(cat, `${id} should exist in the catalog`);
     assert.deepEqual(cat.requiresPreps, ['glass-cutter']);

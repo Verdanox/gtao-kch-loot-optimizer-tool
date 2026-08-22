@@ -303,8 +303,10 @@ styling lives in `css/kch-styles.css`, linked from all three.
     a saved `variant` that the catalog no longer offers, the same way it
     drops stale `itemId`s.
   - **`requiresPreps` (e.g. `["glass-cutter"]`)** — reminder-only metadata
-    on four items (`0-A`, `2-B`, `2-C`, `2-K`) that need a prep mission to
-    actually be lootable in-game. This does **not** gate the optimizer —
+    on five items (`0-A`, `2-B`, `2-C`, `2-H`, `2-K`) that need a prep mission
+    to actually be lootable in-game. `2-H` (Gemstone, Crisp Gallery) was
+    missing this flag until 2026-08-22, when the user caught it as a data
+    bug. This does **not** gate the optimizer —
     no eligibility exclusion, no `state` field, no packing changes. `guide.html`
     just warns if any *packed* item carries it, naming only the ones
     actually present. Full gating (a toggle, excluding these from
