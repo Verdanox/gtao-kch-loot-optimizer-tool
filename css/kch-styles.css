@@ -722,6 +722,26 @@ dialog.feedback-dialog{
   border:1px solid var(--line);
 }
 
+/* Leader line (2026-08-22) — connects a displaced label back to its own
+   pin, drawn only when none of the four candidate placements next to the
+   pin were clean (see positionLabels()/nudgeUpOrDown() in
+   map-scope.html). Color mirrors the pin's own scoped/Buyer's-Choice
+   state (kept in sync by applyPinVisual()) rather than a flat neutral —
+   reinforces which dot a displaced label belongs to using the same
+   encoding the pin itself already carries. Hidden by default; JS toggles
+   display:block only for labels that actually needed it. */
+.scope-pin-leader{
+  position:absolute;
+  height:1px;
+  background:var(--muted);
+  transform-origin:0 0;
+  pointer-events:none;
+  display:none;
+}
+.scope-pin-leader.bc{background:var(--gold-dim);}
+.scope-pin-leader.scoped{background:var(--teal);}
+.scope-pin-leader.scoped.bc{background:var(--gold);}
+
 /* Disambiguation chip list — shown when a tap lands within HIT_RADIUS_PX
    of 2+ pins, instead of guessing which one was meant. position:fixed so
    its left/top can be set directly from the triggering click's
