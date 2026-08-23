@@ -36,6 +36,39 @@ export function itemById(catalog, itemId) {
   return catalog.find(i => i.itemId === itemId);
 }
 
+// ---------- tap-the-pin hit testing (map-scope.html) ----------
+// Given a tap position and a floor/asset's catalog items (each carrying
+// xPct/yPct), returns every item within radiusPx of the tap, nearest
+// first. Empty = no hit (caller no-ops); one entry = unambiguous, open
+// that item directly; 2+ = ambiguous, caller should show a disambiguation
+// chip list instead of guessing.
+//
+// Converts each item's percent position to real rendered pixels PER AXIS
+// (x against imageWidthPx, y against imageHeightPx) before measuring
+// Euclidean distance — never a blended average of width+height. That
+// shortcut was a real, confirmed bug in the scratchpad prototype this
+// graduates from: on a non-square rendered image (e.g. First Floor's
+// 900x727), it silently shrank the effective hit-zone on whichever axis
+// the image was shorter along, producing dead zones where the true
+// per-axis math says a tap should register. `items` only needs
+// `itemId`/`xPct`/`yPct` — pass the full catalog subset for one floor/
+// asset; entries missing coordinates (e.g. BAY, which has none) are
+// skipped rather than throwing.
+export function findNearestPins(items, tapXPx, tapYPx, imageWidthPx, imageHeightPx, radiusPx) {
+  const candidates = [];
+  for (const it of items) {
+    if (it.xPct == null || it.yPct == null) continue;
+    const itemXPx = (it.xPct / 100) * imageWidthPx;
+    const itemYPx = (it.yPct / 100) * imageHeightPx;
+    const dx = tapXPx - itemXPx;
+    const dy = tapYPx - itemYPx;
+    const distancePx = Math.sqrt(dx * dx + dy * dy);
+    if (distancePx <= radiusPx) candidates.push({ itemId: it.itemId, distancePx });
+  }
+  candidates.sort((a, b) => a.distancePx - b.distancePx);
+  return candidates;
+}
+
 // ---------- bonus math ----------
 // Buyer's Request, Elite Challenge, and the Helper bonus all double on
 // Hard mode.

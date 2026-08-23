@@ -60,6 +60,13 @@
   <div class="step">
     <span class="step-num">2</span><span class="step-title">Scoped Secondary Loot</span>
     <div class="step-body">
+      <!-- MAP SCOPE-OUT gateway — a permanent alt-path to the same loot
+           entry, for players who'd rather tap a pin on the real floor art
+           than scroll this list. Never a replacement for the list below;
+           see CLAUDE.md's map-scope.html entry. -->
+      <div class="no-print" id="mapScopeGateway" style="margin:0 0 14px;">
+        <button type="button" id="mapScopeBtn" class="map-view-btn">Prefer tapping a map? Try Map Scope-Out →</button>
+      </div>
       <p class="hint">Every item you can scope is listed below by floor. Fill in the value for what you actually photographed and leave the rest blank. Mark up to <b>three</b> as Buyer's Choice by clicking the item — with Elite Challenge (below) on, these are packed first; with it off, the Buyer's Request bonus still pays out if they end up packed anyway. The Delivery Truck Crate's value can't be known until you grab it, so it's a checkbox that locks in a fixed planning estimate. The Crisp Gallery gemstone varies each run — pick its type from the dropdown; that's a label only and doesn't affect the math.</p>
       <div class="loot-list" id="lootList"></div>
     </div>
@@ -142,6 +149,13 @@ let PRIMARY_TARGETS = [];
 let LOOT_CATALOG = [];
 
 const FEEDBACK_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSde7tKREst9V7fat-8c6yTpRWZkq6k4nNLVK07hNc4wJviivg/viewform?embedded=true';
+
+// Kill switch for the Map Scope-Out gateway — same pattern as guide.html's
+// MAP_VIEW_ENABLED. Flip to true and redeploy once map-scope.html is ready
+// for general discovery; direct navigation to map-scope.html itself always
+// works regardless of this flag — it only gates the button here. Shipped
+// false: the page needs real-world debugging via direct URL first.
+const MAP_SCOPE_ENABLED = false;
 
 // ---------- STATE ----------
 let state = null;    // page1 fields + loot, hydrated from localStorage (or defaults)
@@ -544,6 +558,14 @@ async function init(){
     initClearControls();
     initCopyCsvControls();
     initFeedbackControls();
+    if (MAP_SCOPE_ENABLED) {
+      document.getElementById('mapScopeBtn').addEventListener('click', () => {
+        saveState();
+        location.href = 'map-scope.html';
+      });
+    } else {
+      document.getElementById('mapScopeGateway').style.display = 'none';
+    }
     renderAll();
   } catch (err) {
     document.getElementById('lootList').innerHTML =

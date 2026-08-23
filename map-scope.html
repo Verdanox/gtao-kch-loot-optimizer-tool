@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kortz Center — Map Scope-Out</title>
+<link rel="stylesheet" href="css/kch-styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <p class="eyebrow">Case File · Kortz Center Heist</p>
+    <h1>Map Scope-Out</h1>
+    <p class="sub">Tap a pin on the real floor art to enter its value and mark Buyer's Choice — a permanent alternate way to fill in the same loot chart as Scope &amp; Setup. Everything here autosaves and shows up there too, and vice versa. Primary Target, Difficulty, Crew Size, and everything else still only lives on Scope &amp; Setup.</p>
+  </div>
+
+  <div class="step">
+    <span class="step-num">§</span><span class="step-title">Loading Bay</span>
+    <div class="step-body" id="loadingBayCard"></div>
+  </div>
+
+  <div class="step">
+    <span class="step-num">§</span><span class="step-title">Floor Maps</span>
+    <div class="step-body">
+      <p class="hint">Tap a pin for that item's entry form. A hollow pin is unscoped; a filled pin has a value. Gold means Buyer's Choice (up to three, marked the same way as Scope &amp; Setup). If a tap lands near two pins, pick the right one from the list that pops up.</p>
+      <div id="mapCardsList"></div>
+    </div>
+  </div>
+
+  <div class="no-print" style="text-align:center; margin-top:20px;">
+    <a href="index.html" class="back-link">← Back to Scope &amp; Setup</a>
+  </div>
+
+</div>
+
+<dialog id="entryDialog" class="confirm-dialog">
+  <p class="confirm-title" id="entryDialogTitle" style="color:var(--gold);"></p>
+  <p class="confirm-body" id="entryDialogFloor" style="margin-bottom:16px;"></p>
+  <div id="entryDialogVariantWrap" style="display:none; margin-bottom:14px;">
+    <label class="field-label" id="entryDialogVariantLabel">Type</label>
+    <select id="entryDialogVariant"></select>
+  </div>
+  <div style="margin-bottom:14px;">
+    <label class="field-label">Value ($)</label>
+    <input type="number" id="entryDialogValue" min="0" placeholder="Value $">
+  </div>
+  <label class="bay-check-wrap" style="margin-bottom:20px;">
+    <input type="checkbox" id="entryDialogBc">
+    <span>Buyer's Choice</span>
+  </label>
+  <div class="confirm-actions">
+    <button type="button" id="entryDialogCancelBtn" class="btn-ghost">Cancel</button>
+    <button type="button" id="entryDialogSaveBtn" class="btn-gold">Save</button>
+  </div>
+</dialog>
+
+<script type="module">
+import {
+  itemById, money, findNearestPins,
+  defaultPage1State, defaultPage2State, serializeState, deserializeState, mergeLootByItemId,
+  STORAGE_KEY
+} from './js/kch-model.js';
+
+// Medium hit-zone radius (24px), confirmed 2026-08-15 against the
+// scratchpad prototype — sits almost exactly on First Floor's tightest
+// real cluster's ambiguity boundary (Antique Bands/Art Deco Rings,
+// ~47px apart vs. a 48px combined radius), real enough to trigger
+// disambiguation on the hardest real case without most pins constantly
+// overlapping. See test/find-nearest-pins.test.js for the same numbers
+// exercised as a regression test.
+const HIT_RADIUS_PX = 24;
+// Half of .scope-pin's CSS width (16px) — how far right of a pin's own
+// center its always-on label starts.
+const PIN_RADIUS_PX = 8;
+
+// ---------- DATA ----------
+let LOOT_CATALOG = [];
+let FLOOR_MAPS = {};
+
+// ---------- STATE (hydrated from localStorage) — duplicate-don't-share
+// persistence boilerplate, same convention index.html/guide.html/
+// map-view.html each already follow independently; only pure logic lives
+// in js/kch-model.js. Only fetches secondary-loot.json (no
+// primary-targets.json) — nothing on this page needs a primary value.
+let state = null;
+let page2State = null;
+
+function loadPersisted(){
+  const defaults1 = defaultPage1State(LOOT_CATALOG);
+  const defaults2 = defaultPage2State();
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const { page1, page2 } = deserializeState(raw, defaults1, defaults2);
+  state = { ...page1, loot: mergeLootByItemId(LOOT_CATALOG, page1.loot) };
+  page2State = page2;
+}
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState(state, page2State)));
+}
+
+function buyersChoiceCount(){ return state.loot.filter(l => l.buyersChoice).length; }
+function isScoped(item){
+  return item.value !== '' && item.value !== null && item.value !== undefined && !isNaN(item.value);
+}
+
+// ---------- Floor/asset grouping — the whole catalog, not a packed result.
+// Second and Crisp Gallery share one image (floorMaps is many-to-one), so
+// groups are keyed by resolved asset, same technique map-view.html's
+// renderFloorMaps() uses. Cards render in catalog floor order.
+function buildAssetGroups(){
+  const groups = new Map();
+  LOOT_CATALOG.forEach(cat => {
+    const asset = FLOOR_MAPS[cat.floor];
+    if (!asset || cat.xPct == null || cat.yPct == null) return;
+    if (!groups.has(asset)) groups.set(asset, { floors: new Set(), items: [] });
+    const g = groups.get(asset);
+    g.floors.add(cat.floor);
+    g.items.push(cat);
+  });
+  const floorOrder = [...new Set(LOOT_CATALOG.map(it => it.floor))];
+  return [...groups.entries()].sort((a, b) => {
+    const aIdx = Math.min(...[...a[1].floors].map(f => floorOrder.indexOf(f)));
+    const bIdx = Math.min(...[...b[1].floors].map(f => floorOrder.indexOf(f)));
+    return aIdx - bIdx;
+  });
+}
+
+// ---------- Pin visual state — two independent channels: fill = scoped,
+// gold hue = Buyer's Choice. Four real combinations; see .scope-pin CSS.
+function applyPinVisual(pin, item){
+  pin.classList.toggle('scoped', isScoped(item));
+  pin.classList.toggle('bc', !!item.buyersChoice);
+  const cat = itemById(LOOT_CATALOG, item.itemId);
+  const label = isScoped(item) ? `${cat.name} — ${money(Number(item.value))}` : cat.name;
+  pin.title = label;
+  pin.setAttribute('aria-label', label);
+}
+function updatePinForItem(itemId){
+  const pin = document.querySelector(`.scope-pin[data-item-id="${itemId}"]`);
+  if (!pin) return; // Loading Bay has no pin
+  applyPinVisual(pin, state.loot.find(l => l.itemId === itemId));
+}
+
+// ---------- Always-on labels + collision stagger ----------
+// Positioned in real pixels (not CSS percentages, unlike pins) so a
+// colliding label can be nudged down independently of the pin it names.
+// Runs after the floor image's `load` event (or immediately if already
+// `img.complete`) — real layout is needed to measure real label sizes.
+function positionLabels(mapWrap, labelEls){
+  const rect = mapWrap.getBoundingClientRect();
+  labelEls.forEach(label => {
+    const xPct = Number(label.dataset.xPct);
+    const yPct = Number(label.dataset.yPct);
+    label.style.left = `${(xPct / 100) * rect.width + PIN_RADIUS_PX + 4}px`;
+    label.style.top = `${(yPct / 100) * rect.height}px`;
+  });
+  resolveLabelCollisions(labelEls);
+}
+function rectsOverlap(a, b){
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+// Sorts top-to-bottom/left-to-right for determinism, then nudges each
+// label straight down until it clears every label already placed above
+// it — no text shortening, no clustering. Ported from the validated
+// scratchpad prototype.
+function resolveLabelCollisions(labelEls){
+  const sorted = labelEls.slice().sort((a, b) => {
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    return (ra.top - rb.top) || (ra.left - rb.left);
+  });
+  const placed = [];
+  sorted.forEach(label => {
+    let rect = label.getBoundingClientRect();
+    let moved = true;
+    while (moved){
+      moved = false;
+      for (const p of placed){
+        const pr = p.getBoundingClientRect();
+        if (rectsOverlap(rect, pr)){
+          const currentTop = parseFloat(label.style.top) || 0;
+          label.style.top = `${currentTop + (pr.bottom - rect.top) + 2}px`;
+          rect = label.getBoundingClientRect();
+          moved = true;
+        }
+      }
+    }
+    placed.push(label);
+  });
+}
+function debounce(fn, ms){
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ---------- Disambiguation chip list — shown when a tap lands within
+// HIT_RADIUS_PX of 2+ pins, instead of guessing which one was meant. ----------
+function hideDisambiguation(){
+  const existing = document.getElementById('pinChipList');
+  if (existing) existing.remove();
+}
+function showDisambiguation(hits, clientX, clientY){
+  hideDisambiguation();
+  const panel = document.createElement('div');
+  panel.className = 'pin-chip-list';
+  panel.id = 'pinChipList';
+  hits.forEach(h => {
+    const cat = itemById(LOOT_CATALOG, h.itemId);
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'pin-chip';
+    chip.textContent = cat.name;
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      hideDisambiguation();
+      openEntryDialog(h.itemId);
+    });
+    panel.appendChild(chip);
+  });
+  panel.style.left = `${clientX}px`;
+  panel.style.top = `${clientY}px`;
+  document.body.appendChild(panel);
+  // Deferred so the click that opened the panel doesn't also immediately
+  // close it via the same bubble-to-document pass.
+  setTimeout(() => document.addEventListener('click', hideDisambiguation, { once: true }), 0);
+}
+
+// ---------- Entry dialog — reuses the native <dialog class="confirm-dialog">
+// idiom already used for index.html's Clear Board confirm: free focus-trap,
+// Escape-to-close, backdrop-click-to-dismiss. Fields mirror index.html's
+// row controls (index.html:390-464): value, Buyer's Choice (disabled at
+// the same 3-item max, no row-wide dim elsewhere — 2026-08-15 fix), and,
+// only for items with a `variants` list (Gemstone), the same variant
+// dropdown. ----------
+let currentEntryItemId = null;
+function openEntryDialog(itemId){
+  hideDisambiguation();
+  const cat = itemById(LOOT_CATALOG, itemId);
+  const item = state.loot.find(l => l.itemId === itemId);
+  currentEntryItemId = itemId;
+
+  document.getElementById('entryDialogTitle').textContent = cat.name;
+  document.getElementById('entryDialogFloor').textContent = cat.description ? `${cat.floor} — ${cat.description}` : cat.floor;
+
+  const variantWrap = document.getElementById('entryDialogVariantWrap');
+  const variantSel = document.getElementById('entryDialogVariant');
+  if (Array.isArray(cat.variants) && cat.variants.length){
+    variantWrap.style.display = '';
+    document.getElementById('entryDialogVariantLabel').textContent = cat.variantLabel || 'Type';
+    variantSel.innerHTML = '';
+    const blank = document.createElement('option');
+    blank.value = ''; blank.textContent = cat.variantLabel || 'Type';
+    variantSel.appendChild(blank);
+    cat.variants.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      variantSel.appendChild(opt);
+    });
+    variantSel.value = item.variant || '';
+  } else {
+    variantWrap.style.display = 'none';
+  }
+
+  const valInput = document.getElementById('entryDialogValue');
+  valInput.value = item.value === '' ? '' : item.value;
+
+  const bcCheck = document.getElementById('entryDialogBc');
+  bcCheck.checked = item.buyersChoice;
+  bcCheck.disabled = buyersChoiceCount() >= 3 && !item.buyersChoice;
+
+  const dialog = document.getElementById('entryDialog');
+  dialog.showModal();
+  valInput.focus();
+}
+function initEntryDialog(){
+  const dialog = document.getElementById('entryDialog');
+  document.getElementById('entryDialogCancelBtn').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+  document.getElementById('entryDialogSaveBtn').addEventListener('click', () => {
+    const item = state.loot.find(l => l.itemId === currentEntryItemId);
+    const cat = itemById(LOOT_CATALOG, currentEntryItemId);
+    const valInput = document.getElementById('entryDialogValue');
+    item.value = valInput.value === '' ? '' : Number(valInput.value);
+    item.buyersChoice = document.getElementById('entryDialogBc').checked;
+    if (Array.isArray(cat.variants) && cat.variants.length){
+      item.variant = document.getElementById('entryDialogVariant').value;
+    }
+    saveState();
+    updatePinForItem(currentEntryItemId);
+    dialog.close();
+  });
+}
+
+// ---------- RENDER: Loading Bay callout ----------
+// No map asset exists for this floor (floorMaps has no "Loading Bay"
+// entry, and BAY has no xPct/yPct) — always-visible inline controls, not
+// gated behind a tap/popover like every other item, since there's no map
+// underneath and exactly one item (nothing to disambiguate). Positioned
+// first (its own step, ahead of Floor Maps), mirroring map-view.html's
+// Loading Bay placement rationale.
+function renderLoadingBayCard(){
+  const container = document.getElementById('loadingBayCard');
+  container.innerHTML = '';
+  const cat = LOOT_CATALOG.find(c => c.floor === 'Loading Bay');
+  if (!cat) return;
+  const item = state.loot.find(l => l.itemId === cat.itemId);
+
+  const card = document.createElement('div');
+  card.className = 'floor-map-card scope-bay-card';
+  card.classList.toggle('scoped', isScoped(item));
+  card.classList.toggle('bc', !!item.buyersChoice);
+
+  const desc = document.createElement('p');
+  desc.className = 'hint';
+  desc.style.margin = '0 0 10px';
+  desc.textContent = `${cat.name} — ${cat.description}.`;
+  card.appendChild(desc);
+
+  if (cat.scopeNote){
+    const note = document.createElement('p');
+    note.className = 'item-scope-note';
+    note.style.marginBottom = '10px';
+    note.textContent = cat.scopeNote;
+    card.appendChild(note);
+  }
+
+  const controls = document.createElement('div');
+  controls.style.display = 'flex';
+  controls.style.gap = '18px';
+  controls.style.flexWrap = 'wrap';
+
+  const scopedWrap = document.createElement('label');
+  scopedWrap.className = 'bay-check-wrap';
+  const scopedChk = document.createElement('input');
+  scopedChk.type = 'checkbox';
+  // Same fixed-value lock as index.html: checked -> value = cat.fixedValue
+  // (never shown as a dollar figure — a planning assumption, not a
+  // confirmed value); unchecked -> excluded entirely.
+  scopedChk.checked = item.value === cat.fixedValue;
+  scopedChk.addEventListener('change', e => {
+    item.value = e.target.checked ? cat.fixedValue : '';
+    saveState();
+    renderLoadingBayCard();
+  });
+  scopedWrap.appendChild(scopedChk);
+  scopedWrap.appendChild(document.createTextNode('Scoped'));
+  controls.appendChild(scopedWrap);
+
+  const bcWrap = document.createElement('label');
+  bcWrap.className = 'bay-check-wrap';
+  const bcChk = document.createElement('input');
+  bcChk.type = 'checkbox';
+  bcChk.checked = item.buyersChoice;
+  bcChk.disabled = buyersChoiceCount() >= 3 && !item.buyersChoice;
+  bcChk.addEventListener('change', e => {
+    item.buyersChoice = e.target.checked;
+    saveState();
+    renderLoadingBayCard();
+  });
+  bcWrap.appendChild(bcChk);
+  bcWrap.appendChild(document.createTextNode("Buyer's Choice"));
+  controls.appendChild(bcWrap);
+
+  card.appendChild(controls);
+  container.appendChild(card);
+}
+
+// ---------- RENDER: Floor Maps ----------
+function renderFloorCards(){
+  const container = document.getElementById('mapCardsList');
+  container.innerHTML = '';
+  const sortedGroups = buildAssetGroups();
+
+  sortedGroups.forEach(([asset, g]) => {
+    const floorNames = [...g.floors].join(' / ');
+
+    const card = document.createElement('div');
+    card.className = 'floor-map-card';
+
+    const heading = document.createElement('p');
+    heading.className = 'loot-floor-heading';
+    heading.textContent = floorNames;
+    card.appendChild(heading);
+
+    const mapWrap = document.createElement('div');
+    mapWrap.className = 'floor-map';
+    const img = document.createElement('img');
+    img.src = asset;
+    img.alt = `${floorNames} layout`;
+    mapWrap.appendChild(img);
+
+    const labelEls = [];
+    g.items.forEach(cat => {
+      const item = state.loot.find(l => l.itemId === cat.itemId);
+
+      const pin = document.createElement('div');
+      pin.className = 'scope-pin';
+      pin.dataset.itemId = cat.itemId;
+      pin.style.left = `${cat.xPct}%`;
+      pin.style.top = `${cat.yPct}%`;
+      pin.tabIndex = 0;
+      pin.setAttribute('role', 'button');
+      pin.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openEntryDialog(cat.itemId); }
+      });
+      applyPinVisual(pin, item);
+      mapWrap.appendChild(pin);
+
+      const label = document.createElement('span');
+      label.className = 'scope-pin-label';
+      label.textContent = cat.name;
+      label.dataset.xPct = cat.xPct;
+      label.dataset.yPct = cat.yPct;
+      mapWrap.appendChild(label);
+      labelEls.push(label);
+    });
+
+    // Unified tap handling for direct pin clicks and near-pin taps alike —
+    // pins/labels never stop propagation, so this always sees real click
+    // coordinates relative to the rendered image (labels are additionally
+    // pointer-events:none, so they can never intercept a tap themselves).
+    mapWrap.addEventListener('click', e => {
+      hideDisambiguation();
+      const rect = mapWrap.getBoundingClientRect();
+      const tapXPx = e.clientX - rect.left;
+      const tapYPx = e.clientY - rect.top;
+      const hits = findNearestPins(g.items, tapXPx, tapYPx, rect.width, rect.height, HIT_RADIUS_PX);
+      if (hits.length === 0) return; // dead zone — no pin close enough
+      if (hits.length === 1) openEntryDialog(hits[0].itemId);
+      else showDisambiguation(hits, e.clientX, e.clientY);
+    });
+
+    card.appendChild(mapWrap);
+    container.appendChild(card);
+
+    const layout = () => positionLabels(mapWrap, labelEls);
+    if (img.complete) layout();
+    else img.addEventListener('load', layout, { once: true });
+    window.addEventListener('resize', debounce(layout, 150));
+  });
+}
+
+function renderAll(){
+  renderLoadingBayCard();
+  renderFloorCards();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideDisambiguation(); });
+
+async function init(){
+  try {
+    const lootRes = await fetch('data/secondary-loot.json');
+    const lootData = await lootRes.json();
+
+    LOOT_CATALOG = lootData.items;
+    FLOOR_MAPS = lootData.floorMaps || {};
+
+    loadPersisted();
+    initEntryDialog();
+    renderAll();
+  } catch (err) {
+    document.getElementById('mapCardsList').innerHTML =
+      `<p class="hint" style="color:var(--warn);">Failed to load loot data (${err.message}). Serve this folder over HTTP (not file://) and reload.</p>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
