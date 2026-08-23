@@ -671,6 +671,118 @@ dialog.feedback-dialog{
 }
 .back-link:hover{border-color:var(--gold-dim); color:var(--gold);}
 
+.btn-gold{
+  background:var(--gold);
+  border:1px solid var(--gold);
+  color:var(--bg);
+  font-family:var(--mono);
+  font-weight:600;
+  font-size:12px;
+  text-transform:uppercase;
+  padding:10px 16px;
+  cursor:pointer;
+}
+.btn-gold:hover{background:#dcb662;}
+
+/* map-scope.html — tap-the-pin loot entry (2026-08-22). Two independent
+   visual channels, same as every other 2-state Buyer's Choice indicator
+   in this app: fill = scoped (has a value), gold hue = Buyer's Choice.
+   Four real combinations: hollow/muted (unscoped), hollow/gold-border
+   (unscoped+BC), filled/teal (scoped), filled/gold (scoped+BC). A
+   distinct class family from .map-pin (which encodes which PLAYER a
+   packed item landed with, not scope-entry state) — same shape/size
+   conventions, different meaning. */
+.scope-pin{
+  position:absolute; transform:translate(-50%,-50%);
+  width:16px; height:16px; border-radius:50%;
+  background:var(--panel-2);
+  border:2px solid var(--muted);
+  cursor:pointer;
+  transition:background .12s ease, border-color .12s ease;
+}
+.scope-pin:hover, .scope-pin:focus-visible{border-color:var(--gold);}
+.scope-pin.bc{border-color:var(--gold-dim);}
+.scope-pin.scoped{background:var(--teal); border-color:var(--teal);}
+.scope-pin.scoped.bc{background:var(--gold); border-color:var(--gold);}
+
+/* Always-on item-name label next to a pin, positioned in real pixels by
+   JS (not a CSS percentage, unlike the pin itself) so a colliding label
+   can be nudged straight down independently — see
+   resolveLabelCollisions() in map-scope.html. pointer-events:none so a
+   label can never intercept a tap meant for the map's coordinate-based
+   hit test. */
+.scope-pin-label{
+  position:absolute;
+  transform:translateY(-50%);
+  white-space:nowrap;
+  pointer-events:none;
+  font-family:var(--mono); font-size:10px; color:var(--text);
+  background:rgba(18,21,26,0.78);
+  padding:1px 5px;
+  border:1px solid var(--line);
+}
+
+/* Leader line (2026-08-22) — connects a displaced label back to its own
+   pin, drawn only when none of the four candidate placements next to the
+   pin were clean (see positionLabels()/nudgeUpOrDown() in
+   map-scope.html). Color mirrors the pin's own scoped/Buyer's-Choice
+   state (kept in sync by applyPinVisual()) rather than a flat neutral —
+   reinforces which dot a displaced label belongs to using the same
+   encoding the pin itself already carries. Hidden by default; JS toggles
+   display:block only for labels that actually needed it. */
+.scope-pin-leader{
+  position:absolute;
+  height:1px;
+  background:var(--muted);
+  transform-origin:0 0;
+  pointer-events:none;
+  display:none;
+}
+.scope-pin-leader.bc{background:var(--gold-dim);}
+.scope-pin-leader.scoped{background:var(--teal);}
+.scope-pin-leader.scoped.bc{background:var(--gold);}
+
+/* Disambiguation chip list — shown when a tap lands within HIT_RADIUS_PX
+   of 2+ pins, instead of guessing which one was meant. position:fixed so
+   its left/top can be set directly from the triggering click's
+   clientX/clientY with no scroll-offset math. */
+.pin-chip-list{
+  position:fixed;
+  z-index:20;
+  display:flex; flex-direction:column; gap:4px;
+  background:var(--panel);
+  border:1px solid var(--gold-dim);
+  padding:6px;
+  box-shadow:0 4px 16px rgba(0,0,0,0.5);
+  max-width:220px;
+}
+.pin-chip{
+  background:var(--panel-2);
+  border:1px solid var(--line);
+  color:var(--text);
+  font-family:var(--body);
+  font-size:12.5px;
+  text-align:left;
+  padding:7px 10px;
+  cursor:pointer;
+}
+.pin-chip:hover{border-color:var(--gold-dim); color:var(--gold);}
+
+/* Loading Bay's always-inline callout on map-scope.html — same 2-channel
+   language as .scope-pin above (fill=scoped, gold hue=Buyer's Choice),
+   expressed as a border+background tint since there's no pin/dot here.
+   A distinct class from map-view.html's .loading-bay-card (which encodes
+   which player carried the item post-run, an unrelated meaning) despite
+   the visual family resemblance. */
+.floor-map-card.scope-bay-card{
+  border-left:3px solid var(--line);
+  padding-left:10px;
+  transition:border-color .12s ease, background .12s ease;
+}
+.floor-map-card.scope-bay-card.bc{border-left-color:var(--gold-dim);}
+.floor-map-card.scope-bay-card.scoped{border-left-color:var(--teal); background:rgba(73,200,184,0.06);}
+.floor-map-card.scope-bay-card.scoped.bc{border-left-color:var(--gold); background:rgba(201,162,75,0.1);}
+
 .footnote{
   font-family:var(--mono); font-size:10px; color:var(--muted); text-align:center;
   margin-top:26px; line-height:1.8; opacity:.7;

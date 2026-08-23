@@ -82,6 +82,14 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   Also **sorted by value, most → least valuable** (2026-08-15, user
   request, replacing alphabetical) — see the `primary-targets.json` entry
   under "Data model" below.
+  **Map Scope-Out gateway (2026-08-22), Step 2.** A button atop the loot
+  chart ("Prefer tapping a map? Try Map Scope-Out →") links to
+  `map-scope.html` — see its own entry below. Gated behind a
+  `MAP_SCOPE_ENABLED` const, the exact same kill-switch pattern as
+  `guide.html`'s `MAP_VIEW_ENABLED` (flip to `true` and redeploy to show
+  the button; direct navigation to `map-scope.html` always works
+  regardless). **Shipped `false`**: the page needs real-world debugging
+  via direct URL first, before it's discoverable from this page.
 - `guide.html` — Page 2, Heist Guide. The results/manifest screen, meant to
   be screenshotted or printed during the run. Top-to-bottom: a glass-cutter
   prep reminder banner (if applicable), the security-door-combination field
@@ -225,9 +233,78 @@ as isolated from every other floor including each other (see the
 bag-assignment adjacency notes under "Core logic" below), so pinning a
 Loading Bay note onto Vault's art would misrepresent the routing.
 
-All three pages are `type="module"` and `import` directly from
+- `map-scope.html` — Page (alt), Map Scope-Out, added 2026-08-22. A
+  **permanent alt-path** to `index.html`'s Step 2 loot chart — tap a pin
+  on the real floor art instead of scrolling the flat list — reached via
+  the gateway button described in `index.html`'s entry above (behind
+  `MAP_SCOPE_ENABLED`, shipped `false`) and a "← Back to Scope & Setup"
+  link back. Graduated from a scratchpad prototype (evaluated over
+  several sessions, never git-tracked) once every open design question
+  was settled; see `internal/model-notes.md`-style history in project
+  memory rather than here. **Scope is deliberately narrow**: only
+  per-item value / Buyer's Choice / the Gemstone (`2-H`) variant — Primary
+  Target, Difficulty, Weekly, Crew Size, Elite Challenge, Keep Primary,
+  and Player Names all stay `index.html`-only, unrendered here. Same
+  `localStorage` blob, freely switchable mid-run in either direction — no
+  separate submit button, since the rest of the run still only lives on
+  `index.html`.
+  Follows the same **duplicate-don't-share** convention `index.html`,
+  `guide.html`, and `map-view.html` already each independently follow —
+  its own `loadPersisted()`/`saveState()` copy, calling the same
+  `js/kch-model.js` exports (`defaultPage1State`, `defaultPage2State`,
+  `deserializeState`, `serializeState`, `mergeLootByItemId`, `itemById`).
+  Only fetches `data/secondary-loot.json` (no `primary-targets.json`),
+  same as `map-view.html`, since nothing here needs a primary-target
+  value.
+  Structure, top to bottom: a **Loading Bay callout** (always first, same
+  placement rationale as `map-view.html`'s) with **always-visible inline
+  controls** — a "Scoped" checkbox (locks to `cat.fixedValue`, same as
+  `index.html`'s BAY row) and an independent Buyer's Choice checkbox —
+  rather than the tap/popover pattern every other item uses, since
+  there's no map underneath `BAY` and nothing to disambiguate (one item,
+  no coordinates); then one **floor-map card per resolved map asset**
+  (Vault, Alarm Floor, First, Second/Crisp Gallery-shared), grouped and
+  catalog-ordered exactly like `map-view.html`'s `renderFloorMaps()`, but
+  built from the *whole* catalog (every item, not just a packed result) —
+  this page is an input surface, so unscoped items need pins too.
+  **Pins use a distinct `.scope-pin` class family from `.map-pin`** — the
+  latter encodes which *player* a packed item landed with; here a pin
+  encodes *scope-entry* state via two independent visual channels: fill =
+  scoped (has a value), gold hue = Buyer's Choice — four real
+  combinations, reused as a border/background treatment on the Loading
+  Bay callout too.
+  **Labels are always-on** (every pin's item name, not just on
+  hover/tap) with a **collision-avoidance stagger**: after the floor
+  image's `load` event (or immediately if `img.complete`, since real
+  layout is needed to measure real label sizes), a colliding label is
+  nudged straight down until it clears every label already placed above
+  it (processed top-to-bottom/left-to-right for determinism) — no text
+  shortening, no clustering into a count badge. Verified against the
+  densest real cluster (Second/Crisp Gallery, 13 items sharing one image)
+  at zero remaining overlaps.
+  **Tap handling uses a Medium hit-zone (24px)**, confirmed during
+  prototype evaluation against First Floor's tightest real cluster
+  (Antique Bands/Art Deco Rings, ~47px apart — almost exactly the 48px
+  combined-radius ambiguity boundary). `findNearestPins()` in
+  `js/kch-model.js` does the actual hit-testing (see "Core logic" below)
+  — zero hits is a silent no-op (a known, accepted dead zone between
+  far-apart pins at this radius, not fixed here), one hit opens that
+  item's entry dialog directly, two-plus hits shows a small
+  disambiguation **chip list** at the tap point instead of guessing.
+  The **entry dialog** reuses the native `<dialog class="confirm-dialog">`
+  idiom already used for `index.html`'s Clear Board confirm (free
+  focus-trap/Escape/backdrop-dismiss) — fields mirror `index.html`'s row
+  controls exactly: a value input, a Buyer's Choice checkbox (disabled at
+  the same 3-item max, with **no row-wide dim** on any other row/pin —
+  consistent with the 2026-08-15 fix that removed that dim from
+  `index.html`), and, only for items with a `variants` list (Gemstone),
+  the same variant dropdown. Saving writes back to the matching
+  `state.loot` entry by `itemId` and updates just that one pin's visual
+  state — not a full page rebuild.
+
+All four pages are `type="module"` and `import` directly from
 `js/kch-model.js` (no separate `<script src>` tag for it). Shared visual
-styling lives in `css/kch-styles.css`, linked from all three.
+styling lives in `css/kch-styles.css`, linked from all four.
 
 ## Data model
 - `data/primary-targets.json` — primary painting payouts. Only a base value is
@@ -345,12 +422,29 @@ styling lives in `css/kch-styles.css`, linked from all three.
 `js/kch-model.js` is a pure ES module — no `document`, `fetch`, or
 `localStorage` anywhere in it — holding `packBins()`, `knapsack()`,
 `assignItemsToBags()`, `calcPrimary()`, `bonusAmounts()`, `itemById()`,
-`runOptimizer()`, `computeGuidePayout()`, `computeCareerProgress()`,
-`packedPrepWarnings()`, `buildScopeCsv()`, `money()`, and the
-`serializeState`/`deserializeState`/`mergeLootByItemId`
+`findNearestPins()`, `runOptimizer()`, `computeGuidePayout()`,
+`computeCareerProgress()`, `packedPrepWarnings()`, `buildScopeCsv()`,
+`money()`, and the `serializeState`/`deserializeState`/`mergeLootByItemId`
 persistence helpers. Both pages and the Node test suite (`test/*.test.js`,
 run via `node --test`) import this same file, so there is exactly one
-implementation of the optimizer logic. A marked-and-scoped Buyer's Choice
+implementation of the optimizer logic.
+
+`findNearestPins(items, tapXPx, tapYPx, imageWidthPx, imageHeightPx, radiusPx)`
+(added 2026-08-22) is `map-scope.html`'s tap-the-pin hit-testing helper —
+given a tap position and a floor/asset's catalog items (each carrying
+`xPct`/`yPct`), returns every item within `radiusPx`, nearest first. Pure
+input-surface plumbing, not optimizer logic: no eligibility, weight, or
+packing impact whatsoever, kept here purely so it gets real
+`node --test` coverage (`test/find-nearest-pins.test.js`) instead of
+being buried in page JS — same reasoning as `buildScopeCsv()`. Converts
+each item's percent position to real pixels **per axis** (`x` against
+`imageWidthPx`, `y` against `imageHeightPx`) before measuring Euclidean
+distance — a real bug in the scratchpad prototype this graduates from
+used a blended average of width+height instead, which silently shrank
+the effective hit-zone on non-square rendered images (e.g. First Floor's
+900×727).
+
+A marked-and-scoped Buyer's Choice
 item that the current crew size can't even reach (its `minPlayers`
 exceeds `players`) forces the same forfeiture as a bag-weight overflow —
 it's an illegal combo, not a silent drop — and drops Buyer's Choice
@@ -790,11 +884,34 @@ confirmation dialog on unlock.
 - Consumato's first-time-this-week value: confirmed in this data pull, unlike
   the earlier estimate — use the table value, not the old 4x-guess.
 
+## Backlog (not yet started)
+Raised 2026-08-22, same conversation as `map-scope.html`'s build —
+explicitly out of scope for that change, logged here so they don't read
+as forgotten:
+- **Advanced Settings accordion** (bottom of the scope-out page):
+  unchecked-by-default toggles — "skip Glass Cutter prep" (excludes
+  `requiresPreps: ["glass-cutter"]` items from the optimizer's max-value
+  pack) and a slot for a future "no EMP" toggle alongside it. Default
+  state (both unchecked) must reproduce today's behavior exactly — the
+  optimizer already assumes every prep is done. This is the concrete UI
+  shape for the "specify your preps" system already flagged as deferred
+  under `requiresPreps` in the Data model section above; see
+  `internal/model-notes.md`'s "Glass cutter item gating" section for the
+  prior design discussion.
+- **"Experimental model"**: an alternate optimizer variant weighting
+  items by loot-time + inter-floor travel time, not just bag capacity —
+  motivated by a real observed divergence (two identical scope-outs
+  producing two different "optimal" bag packs, once by hand and once via
+  a friend's separate calculation). Would need to live as a distinct pack
+  strategy alongside today's exact-knapsack model (`packBins()`), gated
+  so it never changes the default optimizer's output.
+
 ## Stack
 Plain HTML/CSS/JS, no build step. Deploys as-is to GitHub Pages. The only
 non-static artifact is `package.json` + `test/`, dev-only tooling for the
 Node test runner — it never ships; GitHub Pages still just serves
-`index.html`/`guide.html`/`js/`/`css/`/`data/` as static files.
+`index.html`/`guide.html`/`map-view.html`/`map-scope.html`/`js/`/`css/`/
+`data/` as static files.
 
 ## Commands
 - `npm test` (or `node --test`) — runs the suite in `test/*.test.js`
