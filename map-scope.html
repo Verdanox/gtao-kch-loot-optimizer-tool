@@ -146,45 +146,72 @@ function updatePinForItem(itemId){
 // colliding label can be nudged down independently of the pin it names.
 // Runs after the floor image's `load` event (or immediately if already
 // `img.complete`) — real layout is needed to measure real label sizes.
-function positionLabels(mapWrap, labelEls){
+//
+// Real bug fix (2026-08-22, user report): a label always grew rightward
+// from its own pin, with two consequences neither collision pass caught.
+// (1) On a tight horizontal row (e.g. Alarm Floor's three same-y items),
+// a long label could reach all the way into a NEIGHBORING pin's dot —
+// resolveLabelCollisions() only ever compared labels against other
+// labels, never against pins, so this never triggered a stagger. (2) A
+// pin near the image's right edge (e.g. Crisp Gallery's "Don't Forgo
+// These Blueprints" at xPct 91.92) grew its label straight off the right
+// edge — .floor-map's overflow:hidden then silently clipped it instead
+// of wrapping it, so the label vanished rather than just looking crowded.
+// Fixed by (1) flipping a label to grow LEFT of its pin instead whenever
+// growing right would exceed the image's width, and (2) passing every
+// pin's rect into resolveLabelCollisions() as a fixed obstacle a label
+// gets pushed down past, on top of the label-vs-label check that already
+// existed.
+function positionLabels(mapWrap, labelEls, pinEls){
   const rect = mapWrap.getBoundingClientRect();
+  const gap = PIN_RADIUS_PX + 4;
   labelEls.forEach(label => {
     const xPct = Number(label.dataset.xPct);
     const yPct = Number(label.dataset.yPct);
-    label.style.left = `${(xPct / 100) * rect.width + PIN_RADIUS_PX + 4}px`;
-    label.style.top = `${(yPct / 100) * rect.height}px`;
+    const pinXPx = (xPct / 100) * rect.width;
+    const pinYPx = (yPct / 100) * rect.height;
+    label.style.left = `${pinXPx + gap}px`;
+    label.style.top = `${pinYPx}px`;
+    const labelWidth = label.getBoundingClientRect().width;
+    if (pinXPx + gap + labelWidth > rect.width) {
+      label.style.left = `${Math.max(0, pinXPx - gap - labelWidth)}px`;
+    }
   });
-  resolveLabelCollisions(labelEls);
+  resolveLabelCollisions(labelEls, pinEls);
 }
 function rectsOverlap(a, b){
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
-// Sorts top-to-bottom/left-to-right for determinism, then nudges each
-// label straight down until it clears every label already placed above
-// it — no text shortening, no clustering. Ported from the validated
-// scratchpad prototype.
-function resolveLabelCollisions(labelEls){
+// Sorts labels top-to-bottom/left-to-right for determinism, then nudges
+// each one straight down until it clears every PIN (a fixed obstacle,
+// any pin, not just its own) and every label already placed above it —
+// no text shortening, no clustering. Ported from the validated
+// scratchpad prototype, extended to treat pins as obstacles too (see the
+// 2026-08-22 fix note above).
+function resolveLabelCollisions(labelEls, pinEls){
+  const pinRects = pinEls.map(p => p.getBoundingClientRect());
   const sorted = labelEls.slice().sort((a, b) => {
     const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
     return (ra.top - rb.top) || (ra.left - rb.left);
   });
-  const placed = [];
+  const placedLabelRects = [];
   sorted.forEach(label => {
     let rect = label.getBoundingClientRect();
     let moved = true;
-    while (moved){
+    let guard = 0;
+    while (moved && guard < 50){
       moved = false;
-      for (const p of placed){
-        const pr = p.getBoundingClientRect();
-        if (rectsOverlap(rect, pr)){
+      guard++;
+      for (const obstacle of [...pinRects, ...placedLabelRects]){
+        if (rectsOverlap(rect, obstacle)){
           const currentTop = parseFloat(label.style.top) || 0;
-          label.style.top = `${currentTop + (pr.bottom - rect.top) + 2}px`;
+          label.style.top = `${currentTop + (obstacle.bottom - rect.top) + 2}px`;
           rect = label.getBoundingClientRect();
           moved = true;
         }
       }
     }
-    placed.push(label);
+    placedLabelRects.push(rect);
   });
 }
 function debounce(fn, ms){
@@ -389,6 +416,7 @@ function renderFloorCards(){
     mapWrap.appendChild(img);
 
     const labelEls = [];
+    const pinEls = [];
     g.items.forEach(cat => {
       const item = state.loot.find(l => l.itemId === cat.itemId);
 
@@ -404,6 +432,7 @@ function renderFloorCards(){
       });
       applyPinVisual(pin, item);
       mapWrap.appendChild(pin);
+      pinEls.push(pin);
 
       const label = document.createElement('span');
       label.className = 'scope-pin-label';
@@ -432,7 +461,7 @@ function renderFloorCards(){
     card.appendChild(mapWrap);
     container.appendChild(card);
 
-    const layout = () => positionLabels(mapWrap, labelEls);
+    const layout = () => positionLabels(mapWrap, labelEls, pinEls);
     if (img.complete) layout();
     else img.addEventListener('load', layout, { once: true });
     window.addEventListener('resize', debounce(layout, 150));
