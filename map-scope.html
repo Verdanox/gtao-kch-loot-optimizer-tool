@@ -483,10 +483,12 @@ function renderLoadingBayCard(){
   if (!cat) return;
   const item = state.loot.find(l => l.itemId === cat.itemId);
 
+  const bcEligible = cat.buyersChoiceEligible !== false;
+
   const card = document.createElement('div');
   card.className = 'floor-map-card scope-bay-card';
   card.classList.toggle('scoped', isScoped(item));
-  card.classList.toggle('bc', !!item.buyersChoice);
+  card.classList.toggle('bc', bcEligible && !!item.buyersChoice);
 
   const desc = document.createElement('p');
   desc.className = 'hint';
@@ -524,20 +526,24 @@ function renderLoadingBayCard(){
   scopedWrap.appendChild(document.createTextNode('Scoped'));
   controls.appendChild(scopedWrap);
 
-  const bcWrap = document.createElement('label');
-  bcWrap.className = 'bay-check-wrap';
-  const bcChk = document.createElement('input');
-  bcChk.type = 'checkbox';
-  bcChk.checked = item.buyersChoice;
-  bcChk.disabled = buyersChoiceCount() >= 3 && !item.buyersChoice;
-  bcChk.addEventListener('change', e => {
-    item.buyersChoice = e.target.checked;
-    saveState();
-    renderLoadingBayCard();
-  });
-  bcWrap.appendChild(bcChk);
-  bcWrap.appendChild(document.createTextNode("Buyer's Choice"));
-  controls.appendChild(bcWrap);
+  // Buyer's Choice control skipped entirely when this item can never be
+  // one (BAY — see data/secondary-loot.json's buyersChoiceEligible note).
+  if (bcEligible){
+    const bcWrap = document.createElement('label');
+    bcWrap.className = 'bay-check-wrap';
+    const bcChk = document.createElement('input');
+    bcChk.type = 'checkbox';
+    bcChk.checked = item.buyersChoice;
+    bcChk.disabled = buyersChoiceCount() >= 3 && !item.buyersChoice;
+    bcChk.addEventListener('change', e => {
+      item.buyersChoice = e.target.checked;
+      saveState();
+      renderLoadingBayCard();
+    });
+    bcWrap.appendChild(bcChk);
+    bcWrap.appendChild(document.createTextNode("Buyer's Choice"));
+    controls.appendChild(bcWrap);
+  }
 
   card.appendChild(controls);
   container.appendChild(card);

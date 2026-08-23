@@ -88,6 +88,24 @@ test('mergeLootByItemId merges saved values onto the current catalog by itemId, 
   }
 });
 
+// BAY (Delivery Truck Crate) can never actually be a Buyer's Choice target
+// in-game — see secondary-loot.json's buyersChoiceEligible note. Regression
+// test for the 2026-08-22 fix: mergeLootByItemId() must force it back to
+// false on every load, even if a stale localStorage blob from before this
+// flag existed (or a future bug) saved it as true.
+test('mergeLootByItemId force-resets buyersChoice to false for a buyersChoiceEligible:false item', () => {
+  const bay = catalog.find(c => c.itemId === 'BAY');
+  assert.equal(bay.buyersChoiceEligible, false, 'expected BAY to carry buyersChoiceEligible:false in the catalog');
+
+  const savedLoot = [
+    { itemId: 'BAY', value: bay.fixedValue, buyersChoice: true }
+  ];
+  const merged = mergeLootByItemId(catalog, savedLoot);
+  const bayEntry = merged.find(l => l.itemId === 'BAY');
+  assert.equal(bayEntry.buyersChoice, false, 'BAY must never merge back as Buyer\'s Choice, regardless of saved state');
+  assert.equal(bayEntry.value, bay.fixedValue, 'the fixed value itself should still merge through unaffected');
+});
+
 // Per-run variant picks (the Gemstone's type today — see `variants` in
 // secondary-loot.json). Descriptive only: they persist and display, and
 // never reach the optimizer.

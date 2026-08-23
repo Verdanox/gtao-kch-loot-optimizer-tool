@@ -1012,6 +1012,14 @@ export function deserializeState(rawJsonString, fallbackPage1, fallbackPage2) {
 // its `variants` list — same spirit as dropping stale itemIds, so a
 // renamed/removed variant can't come back as a label nothing in the game
 // matches. Items with no `variants` always merge back as ''.
+//
+// `buyersChoice` is force-reset to false for any item whose catalog entry
+// carries `buyersChoiceEligible: false` (currently only BAY — the truck's
+// contents can never actually be a Buyer's Choice target in-game),
+// regardless of what's saved. Enforced here, the single place every page's
+// loadPersisted() already funnels through, rather than only at the UI
+// layer — so a value marked true before this flag existed (or written by
+// a future bug) can never silently resurrect as a mandatory Elite pick.
 export function mergeLootByItemId(catalog, savedLoot) {
   const savedById = new Map((savedLoot || []).map(l => [l.itemId, l]));
   return catalog.map(cat => {
@@ -1021,7 +1029,7 @@ export function mergeLootByItemId(catalog, savedLoot) {
     return {
       itemId: cat.itemId,
       value: saved && saved.value !== undefined ? saved.value : '',
-      buyersChoice: saved ? !!saved.buyersChoice : false,
+      buyersChoice: cat.buyersChoiceEligible === false ? false : (saved ? !!saved.buyersChoice : false),
       variant: variants.includes(savedVariant) ? savedVariant : ''
     };
   });

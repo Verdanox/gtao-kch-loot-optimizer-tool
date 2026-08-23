@@ -347,7 +347,8 @@ function renderLootList(){
 
     floorItems.forEach((cat, idx) => {
       const item = state.loot.find(l => l.itemId === cat.itemId);
-      const maxedOut = bcCount >= 3 && !item.buyersChoice;
+      const bcEligible = cat.buyersChoiceEligible !== false;
+      const maxedOut = bcEligible && bcCount >= 3 && !item.buyersChoice;
       const bcId = `bc-${cat.itemId}`;
 
       // Whole-row click target: the row itself is a <label for="bc-{id}">
@@ -359,11 +360,16 @@ function renderLootList(){
       // label click to the labeled control when the click lands on plain
       // (non-control) row content, never when it lands directly on a
       // nested form control.
-      const row = document.createElement('label');
+      //
+      // Items that can never be a Buyer's Choice target at all (BAY —
+      // see data/secondary-loot.json's buyersChoiceEligible note) get a
+      // plain <div> row instead of a <label> — no click-for-BC affordance,
+      // since there's no checkbox to label.
+      const row = document.createElement(bcEligible ? 'label' : 'div');
       row.className = 'loot-item';
-      row.htmlFor = bcId;
+      if (bcEligible) row.htmlFor = bcId;
       if (idx % 2 === 1) row.classList.add('chk-b');
-      if (item.buyersChoice) row.classList.add('bc-active');
+      if (bcEligible && item.buyersChoice) row.classList.add('bc-active');
       if (maxedOut) row.classList.add('bc-locked');
 
       // name
@@ -387,15 +393,18 @@ function renderLootList(){
       // hidden Buyer's Choice checkbox — must sit immediately before the
       // value input in DOM order so "click row, then Tab once" lands on
       // the value input (tab order follows DOM order, not visual position).
-      const bcCheck = document.createElement('input');
-      bcCheck.type = 'checkbox';
-      bcCheck.id = bcId;
-      bcCheck.className = 'bc-hidden';
-      bcCheck.checked = item.buyersChoice;
-      bcCheck.disabled = maxedOut;
-      bcCheck.setAttribute('aria-label', `Buyer's Choice: ${cat.name}`);
-      bcCheck.addEventListener('change', e => { item.buyersChoice = e.target.checked; renderAll(); });
-      row.appendChild(bcCheck);
+      // Skipped entirely when this item can never be Buyer's Choice.
+      if (bcEligible){
+        const bcCheck = document.createElement('input');
+        bcCheck.type = 'checkbox';
+        bcCheck.id = bcId;
+        bcCheck.className = 'bc-hidden';
+        bcCheck.checked = item.buyersChoice;
+        bcCheck.disabled = maxedOut;
+        bcCheck.setAttribute('aria-label', `Buyer's Choice: ${cat.name}`);
+        bcCheck.addEventListener('change', e => { item.buyersChoice = e.target.checked; renderAll(); });
+        row.appendChild(bcCheck);
+      }
 
       // controls (value input, or for BAY, its own fixed-value checkbox,
       // plus an optional variant dropdown — all independent click targets
@@ -471,11 +480,14 @@ function renderLootList(){
 
       // visible "BC" badge — purely decorative state indicator; the
       // gold row highlight (bc-active, above) already carries the real
-      // selected/unselected signal, driven off item.buyersChoice.
-      const badge = document.createElement('span');
-      badge.className = 'bc-badge';
-      badge.textContent = 'BC';
-      row.appendChild(badge);
+      // selected/unselected signal, driven off item.buyersChoice. Skipped
+      // for BC-ineligible items, same as the checkbox itself.
+      if (bcEligible){
+        const badge = document.createElement('span');
+        badge.className = 'bc-badge';
+        badge.textContent = 'BC';
+        row.appendChild(badge);
+      }
 
       itemsWrap.appendChild(row);
     });
