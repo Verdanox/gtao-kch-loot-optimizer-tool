@@ -109,6 +109,23 @@
     </div>
   </div>
 
+  <!-- ADVANCED SETTINGS -->
+  <details class="step advanced-settings">
+    <summary class="step-title">Advanced Settings</summary>
+    <div class="step-body">
+      <label class="adv-check-wrap">
+        <input type="checkbox" id="skipGlassCutterCheck">
+        Skip Glass Cutter prep
+      </label>
+      <p class="hint">Excludes items that need the Glass Cutter prep from the optimizer entirely, for a run where that prep wasn't actually done. Off by default — the optimizer otherwise assumes every prep is done, same as before this setting existed.</p>
+      <label class="adv-check-wrap">
+        <input type="checkbox" id="experimentalPackingCheck">
+        Experimental: time-optimized packing
+      </label>
+      <p class="hint">Tries to balance loot-time and floor travel between players (Alarm Floor/First/Second/Crisp Gallery only) instead of just maximizing bag value placement, on the Heist Guide's "Who Grabs What." Doesn't change which items get chosen or your total secondary value — only who carries what.</p>
+    </div>
+  </details>
+
   <!-- SUBMIT -->
   <div class="step" style="text-align:center;">
     <button type="button" id="submitBtn" class="submit-btn">Continue to Heist Guide →</button>
@@ -224,11 +241,25 @@ function initSelects(){
     });
   });
 
+  // Advanced Settings — both default off, both persisted on state directly
+  // (skipPreps is an array; experimentalPacking a plain boolean, matching
+  // page2.locked's convention — not a toggle-group, per the native
+  // checkbox pattern this accordion uses).
+  document.getElementById('skipGlassCutterCheck').addEventListener('change', e => {
+    state.skipPreps = e.target.checked ? ['glass-cutter'] : [];
+    renderAll();
+  });
+  document.getElementById('experimentalPackingCheck').addEventListener('change', e => {
+    state.experimentalPacking = e.target.checked;
+    saveState(); // affects guide.html's optimizer call only — nothing on this page re-renders off it
+  });
+
   syncToggleGroup('difficultyToggle', state.difficulty);
   syncToggleGroup('weeklyToggle', state.weekly);
   syncToggleGroup('keepPrimaryToggle', state.keepPrimary);
   syncToggleGroup('eliteToggle', state.elite);
   syncCrewSelect();
+  syncAdvancedSettings();
 
   document.getElementById('submitBtn').addEventListener('click', () => {
     saveState();
@@ -284,6 +315,7 @@ function clearAll(){
   syncToggleGroup('keepPrimaryToggle', state.keepPrimary);
   syncToggleGroup('eliteToggle', state.elite);
   syncCrewSelect();
+  syncAdvancedSettings();
   renderAll();
 }
 
@@ -308,6 +340,10 @@ function syncCrewSelect(){
   document.querySelectorAll('.crew-opt').forEach(b=>{
     b.classList.toggle('active', parseInt(b.dataset.val,10) === state.players);
   });
+}
+function syncAdvancedSettings(){
+  document.getElementById('skipGlassCutterCheck').checked = state.skipPreps.includes('glass-cutter');
+  document.getElementById('experimentalPackingCheck').checked = !!state.experimentalPacking;
 }
 
 function renderCrewHint(){

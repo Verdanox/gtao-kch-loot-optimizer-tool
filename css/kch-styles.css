@@ -130,6 +130,37 @@ h1{
 }
 .step-body{margin-top:16px;}
 
+/* Advanced Settings accordion (2026-08-23) — a native <details class="step
+   advanced-settings"> so it visually matches every other .step panel, with
+   its own expand/collapse for free (no existing accordion precedent in
+   this app before this). <summary class="step-title"> stands in for the
+   .step-num + .step-title pair every numbered step uses — there's no
+   step number here, it's not part of the input sequence. */
+.advanced-settings > summary{
+  cursor:pointer;
+  list-style:none;
+  outline:none;
+}
+.advanced-settings > summary::-webkit-details-marker{display:none;}
+.advanced-settings > summary::before{
+  content:'▸ ';
+  color:var(--gold);
+}
+.advanced-settings[open] > summary::before{content:'▾ ';}
+.advanced-settings .step-body{margin-top:16px;}
+.adv-check-wrap{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-family:var(--mono);
+  font-size:13px;
+  color:var(--text);
+  cursor:pointer;
+  margin-bottom:6px;
+}
+.adv-check-wrap input{width:auto; cursor:pointer;}
+.adv-check-wrap + .hint{margin-top:0;}
+
 label.field-label{
   display:block;
   font-family:var(--mono);

@@ -90,6 +90,33 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   the button; direct navigation to `map-scope.html` always works
   regardless). **Shipped `false`**: the page needs real-world debugging
   via direct URL first, before it's discoverable from this page.
+  **Advanced Settings accordion (2026-08-23), after Step 5, before
+  Submit.** A native `<details class="step advanced-settings">` — no
+  existing accordion precedent in the app before this, chosen because it
+  needs no JS for expand/collapse and stays keyboard-accessible for free;
+  `<summary class="step-title">` stands in for the numbered
+  `.step-num`+`.step-title` pair every real step uses, since this isn't
+  part of the input sequence (closed by default, easy to skip). Holds two
+  independent, unchecked-by-default native checkboxes (not
+  `.toggle-group` pairs like the rest of Page 1 — user-confirmed
+  preference, matching this feature's own "checkbox" framing and the
+  existing `.bay-check-wrap` precedent): "Skip Glass Cutter prep"
+  (`state.skipPreps`, an extensible string array rather than a one-off
+  boolean, so a future prep-gated toggle just adds another string — see
+  `isItemReachable()` under "Model module" below) and "Experimental:
+  time-optimized packing" (`state.experimentalPacking`, a plain boolean).
+  Both default to values that reproduce pre-2026-08-23 behavior exactly
+  (`skipPreps: []` assumes every prep done, same as always;
+  `experimentalPacking: false` keeps the default value-model bag split).
+  Neither setting has a live-updating effect on this page itself — both
+  only change what `guide.html` computes when it calls `runOptimizer()`,
+  so their handlers just update `state`/`saveState()` without triggering
+  `renderAll()`'s full loot-list rerender. These were originally two
+  separate backlog ideas (an "Advanced Settings accordion" for
+  `skipPreps`, and a wholly separate "experimental model" for
+  loot-time/travel-weighted packing) that converged onto one shared
+  accordion once designed together — see "Core logic" below for the
+  experimental packing model itself.
 - `guide.html` — Page 2, Heist Guide. The results/manifest screen, meant to
   be screenshotted or printed during the run. Top-to-bottom: a glass-cutter
   prep reminder banner (if applicable), the security-door-combination field
@@ -104,7 +131,15 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   used to be welded into the same per-player card. Has a "back to edit"
   link back to `index.html`; every page hydrates from the same
   `localStorage` blob, so navigation in any direction needs no extra
-  state-passing.
+  state-passing. **`state.experimentalPacking` indicator (2026-08-23).**
+  When on, a small `.hint`-style line appears directly under the "Who
+  Grabs What" heading ("⚡ Experimental: time-optimized packing is on —
+  ..."), so a host isn't confused about why the bag split differs from a
+  prior view or from what `index.html`'s scope-out would otherwise
+  suggest. Purely a display toggle in `renderItemsList()` — the actual
+  packing swap already happens inside `runOptimizer()` itself (see "Core
+  logic" below), since `state` flows into that call by reference with no
+  extra wiring needed here.
 - `map-view.html` — Page 3, Map View, added 2026-08-06. A lean,
   host-facing, screenshot/share-friendly live-reference for the *actual
   run*, reached via the "Map View →" button on `guide.html` (sitting
@@ -257,12 +292,16 @@ Loading Bay note onto Vault's art would misrepresent the routing.
   same as `map-view.html`, since nothing here needs a primary-target
   value.
   Structure, top to bottom: a **Loading Bay callout** (always first, same
-  placement rationale as `map-view.html`'s) with **always-visible inline
-  controls** — a "Scoped" checkbox (locks to `cat.fixedValue`, same as
-  `index.html`'s BAY row) and an independent Buyer's Choice checkbox —
-  rather than the tap/popover pattern every other item uses, since
-  there's no map underneath `BAY` and nothing to disambiguate (one item,
-  no coordinates); then one **floor-map card per resolved map asset**
+  placement rationale as `map-view.html`'s) with an **always-visible
+  inline "Scoped" checkbox** (locks to `cat.fixedValue`, same as
+  `index.html`'s BAY row) — rather than the tap/popover pattern every
+  other item uses, since there's no map underneath `BAY` and nothing to
+  disambiguate (one item, no coordinates). No Buyer's Choice control here
+  (2026-08-22 fix, gated on `cat.buyersChoiceEligible !== false`,
+  currently `false` only for `BAY`) — the truck's contents can never
+  actually be a Buyer's Choice target in-game; see `secondary-loot.json`'s
+  `buyersChoiceEligible` note under "Data model" below. Then one
+  **floor-map card per resolved map asset**
   (Vault, Alarm Floor, First, Second/Crisp Gallery-shared), grouped and
   catalog-ordered exactly like `map-view.html`'s `renderFloorMaps()`, but
   built from the *whole* catalog (every item, not just a packed result) —
@@ -379,16 +418,46 @@ styling lives in `css/kch-styles.css`, linked from all four.
     `variants` list and get the same control. `mergeLootByItemId()` drops
     a saved `variant` that the catalog no longer offers, the same way it
     drops stale `itemId`s.
-  - **`requiresPreps` (e.g. `["glass-cutter"]`)** — reminder-only metadata
-    on five items (`0-A`, `2-B`, `2-C`, `2-H`, `2-K`) that need a prep mission
-    to actually be lootable in-game. `2-H` (Gemstone, Crisp Gallery) was
+  - **`requiresPreps` (e.g. `["glass-cutter"]`)** — metadata on five items
+    (`0-A`, `2-B`, `2-C`, `2-H`, `2-K`) that need a prep mission to
+    actually be lootable in-game. `2-H` (Gemstone, Crisp Gallery) was
     missing this flag until 2026-08-22, when the user caught it as a data
-    bug. This does **not** gate the optimizer —
-    no eligibility exclusion, no `state` field, no packing changes. `guide.html`
-    just warns if any *packed* item carries it, naming only the ones
-    actually present. Full gating (a toggle, excluding these from
-    selection when the prep isn't marked done) is deferred to a future
-    "specify your preps" system — see `internal/model-notes.md`.
+    bug. `guide.html` warns if any *packed* item carries it (regardless of
+    `state.skipPreps`, since a chosen item could still carry the flag with
+    the prep assumed done), naming only the ones actually present.
+    **Full gating shipped 2026-08-23** as `index.html`'s "Skip Glass
+    Cutter prep" Advanced Settings checkbox — `state.skipPreps` (an
+    extensible string array, not a one-off boolean), consumed by the
+    shared `isItemReachable(catItem, state)` predicate in `kch-model.js`
+    (see "Model module" below), which both of `runOptimizer()`'s
+    reachability checks (the `eligible` filter and `bcIneligibleIds`) now
+    call instead of two independent inline `minPlayers` checks. Defaults
+    to `skipPreps: []`, reproducing pre-2026-08-23 behavior exactly (every
+    prep assumed done). This is a deliberate refinement of the older
+    `state.activePreps` design in `internal/model-notes.md`'s "Glass
+    cutter item gating" section (which defaulted to *populated*, an
+    opt-in framing) — `skipPreps`'s opt-out framing lets the checkbox
+    read "Skip Glass Cutter prep" and stay unchecked by default while
+    still exactly preserving today's full-eligibility behavior. Kept
+    deliberately minimal per the user's own "quick change" framing — not
+    building the fuller reason-aware ineligibility messaging (distinguishing
+    "needs more players" from "prep skipped" in the UI) or loot-chart
+    row-dimming for prep-excluded items that `internal/model-notes.md`'s
+    "Atlas's feasibility review" flagged as ideal; that stays available as
+    a documented follow-up there, not built now.
+  - **`buyersChoiceEligible` (2026-08-22/23), currently only `false` on
+    `BAY`** — the Delivery Truck Crate's contents can never actually be
+    picked as a Buyer's Choice target in-game. Absent/defaults to `true`
+    on every other item. `index.html`'s loot row renders as a plain `<div>`
+    instead of a `<label>` wrapping a hidden BC checkbox for such an item
+    (no BC badge either), and `map-scope.html`'s Loading Bay callout skips
+    its Buyer's Choice checkbox entirely (see that page's entry above).
+    `mergeLootByItemId()` in `kch-model.js` force-resets `buyersChoice` to
+    `false` for any `buyersChoiceEligible:false` item on every load,
+    regardless of what's saved — a single point of enforcement (every
+    page's `loadPersisted()` funnels through it) so a stale `true` from
+    before this flag existed can't resurrect as a mandatory Elite pick on
+    any page.
   - On `index.html`, the entire loot row is the Buyer's Choice click
     target (a `<label>` wrapping a visually-hidden checkbox, per-item
     `aria-label`) — not just a small checkbox — while the value input (and
@@ -422,12 +491,28 @@ styling lives in `css/kch-styles.css`, linked from all four.
 `js/kch-model.js` is a pure ES module — no `document`, `fetch`, or
 `localStorage` anywhere in it — holding `packBins()`, `knapsack()`,
 `assignItemsToBags()`, `calcPrimary()`, `bonusAmounts()`, `itemById()`,
-`findNearestPins()`, `runOptimizer()`, `computeGuidePayout()`,
-`computeCareerProgress()`, `packedPrepWarnings()`, `buildScopeCsv()`,
-`money()`, and the `serializeState`/`deserializeState`/`mergeLootByItemId`
-persistence helpers. Both pages and the Node test suite (`test/*.test.js`,
-run via `node --test`) import this same file, so there is exactly one
-implementation of the optimizer logic.
+`findNearestPins()`, `isItemReachable()`, `timeWeightFor()`,
+`exhibitTravelCost()`, `packBinsForTime()`, `runOptimizer()`,
+`computeGuidePayout()`, `computeCareerProgress()`, `packedPrepWarnings()`,
+`buildScopeCsv()`, `money()`, and the
+`serializeState`/`deserializeState`/`mergeLootByItemId` persistence
+helpers. Both pages and the Node test suite (`test/*.test.js`, run via
+`node --test`) import this same file, so there is exactly one
+implementation of the optimizer logic. A dev-only CLI, `test/compare-
+packing.mjs` (never shipped — same category as the rest of `test/`, see
+"Stack" below), prints a default-vs-experimental side-by-side report for
+any real scope-out JSON, for trying the experimental model locally
+without the browser.
+
+`isItemReachable(catItem, state)` (added 2026-08-23) is the shared
+reachability predicate `runOptimizer()`'s two independent inline checks
+(the `eligible` filter and `bcIneligibleIds`) both now call, so they can
+never silently disagree the way two separately-maintained checks risked
+doing once a second gate (prep-skipping, alongside crew size) existed.
+`(catItem.minPlayers > state.players) → false`, else every string in
+`catItem.requiresPreps` must be absent from `state.skipPreps` — see
+"Skip Glass Cutter prep" under the Data model section's `requiresPreps`
+entry above.
 
 `findNearestPins(items, tapXPx, tapYPx, imageWidthPx, imageHeightPx, radiusPx)`
 (added 2026-08-22) is `map-scope.html`'s tap-the-pin hit-testing helper —
@@ -467,10 +552,19 @@ full history). Both primitives stay only as tested building blocks now —
 host-routing tie-break behavior covered directly by
 `test/bin-packing.test.js` — not because Greedy is still on the roadmap.
 
+`timeWeightFor(catItem)`, `exhibitTravelCost(floorSet)`, and
+`packBinsForTime(items, bins, capacityPerBin)` (all added 2026-08-23) back
+the "Experimental: time-optimized packing" Advanced Settings toggle — see
+"Core logic" below for the full design (objective, scope, tiers,
+algorithm). Kept alongside `packBins()` in the same file rather than a
+separate module, matching how `knapsack()`/`assignItemsToBags()` already
+sit next to it as alternate/legacy pack strategies.
+
 ## Persistence
 Page 1 inputs (primary target, difficulty, weekly status, players, keep-
 primary toggle, loot values/Buyer's Choice flags, Elite toggle, player
-names) and Page 2's
+names, and the two Advanced Settings fields — `skipPreps`/
+`experimentalPacking`, both added 2026-08-23) and Page 2's
 `securityCombo` + `locked` fields all autosave to a single versioned
 `localStorage` key (`kch-loot-ledger:v1`) on every input/change event, and
 survive page refresh, closing/reopening the browser, and navigating
@@ -875,6 +969,83 @@ confirmation dialog on unlock.
   reiterating that it's excluded from Total Take/Payout below — see
   `index.html`'s Step 1 entry above for the toggle itself and why it's
   disabled for the mandatory story target.
+- **Experimental time-optimized packing (2026-08-23), behind
+  `state.experimentalPacking`.** A second bag-*assignment* strategy for
+  the exact same selected item set `packBins()` already chose — never a
+  second knapsack, never a different total secondary value. Motivated by
+  a real observed divergence: two identical scope-outs (same 8 items,
+  same $577,500 total) produced two different bag splits when compared
+  against an independent calculator — this tool's default split gave the
+  host a 3-floor cross-building route (Alarm Floor → First → Crisp
+  Gallery), while the other calculator kept the host to a tighter,
+  fully-adjacent 2-floor route (First → Crisp Gallery) by routing the
+  crew's one Alarm Floor item to the non-host player instead. Both splits
+  were equally value-optimal — `packBins()`'s five-tier reconstruction
+  heuristic (above) was never designed to minimize floor-hopping, only to
+  cluster it a little.
+  - **Scope is deliberately narrow: only exhibit floors** (Alarm Floor,
+    First, Second, Crisp Gallery) **carry any time-cost at all.** Vault
+    and Loading Bay contribute zero — both are effectively fixed,
+    mandatory stops regardless of loot (the host must enter the Vault for
+    the Primary Target either way), so this model only measures the
+    genuinely discretionary exhibit-floor routing choice. Vault/Loading
+    Bay items are still placed first, via a plain call to `packBins()`
+    itself (as all-mandatory, no optional items) — reusing its
+    already-correct `HOST_AVOID_FLOORS` tier-0 logic with zero duplicated
+    code, confirmed with the user rather than assumed.
+  - **Item time-weight tiers**, verified against the full catalog (no
+    orphan bag-weight class left unhandled — every 30-weight exhibit item
+    already requires the glass cutter): a glass-cutter item scores 3
+    (takes the longest), a weight-10 item scores 1, everything else
+    (weight 20, or weight 50/painting) scores 2.
+  - **Travel cost is the real shortest-path distance** between the floors
+    a bag touches, via a small MST over the pairwise BFS distances on the
+    existing `FLOOR_ADJACENCY` graph `packBins()`'s tier 3 already uses —
+    not a flat "distinct floors − 1" count. A flat count would treat
+    Alarm Floor + Crisp Gallery as a single 1-hop cost, when both only
+    connect through First (a real 2-hop detour) — this was a genuine hole
+    identified and closed during design, before any code was written.
+    With only 4 possible exhibit floors this is exact, not an
+    approximation.
+  - **Objective: minimize the max (bottleneck) per-player time-cost, not
+    the total sum** — confirmed with the user directly (the crew is only
+    as fast as its slowest player; a sum-minimizing objective could leave
+    one player lopsidedly loaded if it lowered the total).
+  - **An exact search, not a greedy heuristic** — a candidate max-cost
+    threshold `T` is scanned from 0 upward, each checked via a memoized
+    recursive feasibility search (per-bin state: remaining weight
+    capacity, floor-touched bitmask, cumulative time-weight), and the
+    first feasible `T` is the true minimum. A greedy "assign to the
+    currently-lowest-cost bin" heuristic was considered and rejected —
+    unlike an exact search, it isn't guaranteed to find a feasible
+    packing even when one exists, the same class of bug `packBins()`
+    itself was rewritten to avoid on 2026-08-01 (the pooled-knapsack-
+    then-FFD-split bug). Reconstruction ties are broken by reusing
+    `packBins()`'s existing tiers 2–4 (same-floor clustering →
+    adjacent-floor → most remaining capacity → ascending bin index) —
+    confirmed with the user — but *not* tier 1 (host-priority for
+    Second/Crisp Gallery), since that's specifically about the value
+    model's EMP-verification rationale, unrelated to this objective.
+  - **Known limitation, accepted for "experimental" status**: placing
+    Vault/Loading Bay items via a fresh, independent `packBins()` call
+    isn't provably guaranteed to leave enough remaining capacity for the
+    exhibit-item search to succeed in every theoretically possible case (a
+    single joint search across both phases would close this gap, at real
+    added complexity). In practice this is a non-issue for this catalog —
+    Vault/Loading Bay items are few and comparatively light against
+    100-capacity bags — but `packBinsForTime()` returns `null` rather
+    than an invalid/overflowing bag if it ever can't find a feasible
+    split, and `runOptimizer()` silently keeps the default
+    value-preserving split for that run when that happens — always safe,
+    since that's the split it would have produced anyway.
+  - **Verification**: `test/pack-bins-for-time.test.js` includes a real
+    regression fixture built from the two screenshots that motivated this
+    feature (hand-verified true minimum bottleneck of 8, vs. 12 for this
+    tool's own default split on the same items), direct `exhibitTravelCost()`
+    adjacency tests, an `isItemReachable`/`skipPreps` gating test, and a
+    300-trial fuzz test asserting `experimentalPacking` never overflows a
+    bag and never changes value/selection vs. the default run — same
+    fuzzing convention as `test/pack-bins.test.js`'s own fuzz test.
 
 ## Known open questions (confirm before shipping)
 - The source payout table also included values for runs where witnesses/CCTV
@@ -885,26 +1056,13 @@ confirmation dialog on unlock.
   the earlier estimate — use the table value, not the old 4x-guess.
 
 ## Backlog (not yet started)
-Raised 2026-08-22, same conversation as `map-scope.html`'s build —
-explicitly out of scope for that change, logged here so they don't read
-as forgotten:
-- **Advanced Settings accordion** (bottom of the scope-out page):
-  unchecked-by-default toggles — "skip Glass Cutter prep" (excludes
-  `requiresPreps: ["glass-cutter"]` items from the optimizer's max-value
-  pack) and a slot for a future "no EMP" toggle alongside it. Default
-  state (both unchecked) must reproduce today's behavior exactly — the
-  optimizer already assumes every prep is done. This is the concrete UI
-  shape for the "specify your preps" system already flagged as deferred
-  under `requiresPreps` in the Data model section above; see
-  `internal/model-notes.md`'s "Glass cutter item gating" section for the
-  prior design discussion.
-- **"Experimental model"**: an alternate optimizer variant weighting
-  items by loot-time + inter-floor travel time, not just bag capacity —
-  motivated by a real observed divergence (two identical scope-outs
-  producing two different "optimal" bag packs, once by hand and once via
-  a friend's separate calculation). Would need to live as a distinct pack
-  strategy alongside today's exact-knapsack model (`packBins()`), gated
-  so it never changes the default optimizer's output.
+Nothing currently open — both items raised 2026-08-22 (Advanced Settings
+accordion, experimental time-optimized packing model) shipped 2026-08-23;
+see `index.html`'s Advanced Settings entry under Pages and "Core logic"'s
+experimental time-optimized packing section below. A future "no EMP"
+toggle alongside "Skip Glass Cutter prep" was floated but not designed or
+built — no slot reserved for it in the accordion's markup, just a
+plausible next entry if it's ever picked up.
 
 ## Stack
 Plain HTML/CSS/JS, no build step. Deploys as-is to GitHub Pages. The only
