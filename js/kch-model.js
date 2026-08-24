@@ -368,7 +368,20 @@ function floorsAdjacent(a, b) {
   return a !== undefined && b !== undefined && !!FLOOR_ADJACENCY[a] && FLOOR_ADJACENCY[a].has(b);
 }
 
-export function packBins(mandatory, optional, bins, capacityPerBin) {
+// `extraHostAvoidFloors` (2026-08-23): an optional Set, unioned with
+// HOST_AVOID_FLOORS for this call only — every existing caller omits it
+// and sees zero behavior change. Added specifically for
+// packBinsForTime()'s non-exhibit pre-pass (see its doc comment), which
+// needs 'Loading Bay' routed away from the host even though the shared
+// HOST_AVOID_FLOORS constant deliberately does NOT include it for the
+// default value-model — the user confirmed 2026-08-23 that in real runs
+// the value model's own tier-1 host-priority crowding already tends to
+// push Loading Bay off the host's bag "by accident," so no fix was needed
+// there; the time model's isolated single-item pre-pass has no such
+// crowding and was defaulting Loading Bay onto the host via plain
+// ascending-bin-index tie-break, which the user wants avoided (fine for a
+// solo run, not otherwise).
+export function packBins(mandatory, optional, bins, capacityPerBin, extraHostAvoidFloors) {
   const allWeights = [...mandatory, ...optional].map(i => i.weightUnits).filter(w => w > 0);
   const unit = allWeights.reduce((g, w) => gcd(g, w), capacityPerBin);
   const cap = Math.round(capacityPerBin / unit);
@@ -571,7 +584,7 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
     // ever narrows among candidates already confirmed not to cost the
     // optimal total, and falls back to including the host when they're
     // the only remaining valid bag (solo runs, or every other bag full).
-    if (HOST_AVOID_FLOORS.has(it.floor)) {
+    if (HOST_AVOID_FLOORS.has(it.floor) || (extraHostAvoidFloors && extraHostAvoidFloors.has(it.floor))) {
       const nonHost = candidates.filter(c => c.b !== 0);
       if (nonHost.length > 0) candidates = nonHost;
     }
@@ -640,14 +653,27 @@ const EXHIBIT_FLOORS = new Set(['Alarm Floor', 'First', 'Second', 'Crisp Gallery
 const EXHIBIT_FLOOR_LIST = [...EXHIBIT_FLOORS];
 const EXHIBIT_FLOOR_INDEX = new Map(EXHIBIT_FLOOR_LIST.map((f, i) => [f, i]));
 
-// Item time-weight tiers, confirmed against the full catalog: every
-// 30-weight exhibit item already requires the glass cutter, so there's
-// no orphan bag-weight class left unhandled. Never read by the default
-// packBins() path above.
+// Item time-weight, 2026-08-23: prefers the real per-item
+// `lootTimeWeight` the user hand-tuned into secondary-loot.json (see its
+// `_notes` entry for the 1-5 scale and how it was sourced) over the older
+// 3-tier weight/requiresPreps-derived heuristic below, which now only
+// serves as a fallback for any item that field is absent on (e.g. a
+// future catalog addition that ships before its real value is known —
+// never Vault/BAY today, since those are filtered out of the exhibit set
+// before this function is ever called on them). Never read by the
+// default packBins() path above.
 export function timeWeightFor(catItem) {
+  if (typeof catItem.lootTimeWeight === 'number') return catItem.lootTimeWeight;
   if ((catItem.requiresPreps || []).includes('glass-cutter')) return 3;
   return catItem.weight === 10 ? 1 : 2; // weight 20, or 50 (painting)
 }
+
+// A single floor transition costs about the same as a glass-cutter item's
+// loot time (tier 5 on timeWeightFor()'s scale) — confirmed with the user
+// 2026-08-23. Kept as one named constant rather than baked into the
+// BFS/MST math directly, so the ratio stays visible and adjustable in one
+// place if the relative scale above is ever retuned.
+const FLOOR_TRANSITION_COST = 5;
 
 // BFS shortest-path distance (in floor-transitions) between two floors,
 // over the same FLOOR_ADJACENCY graph packBins()'s tier 3 already uses.
@@ -677,7 +703,11 @@ function shortestFloorDistance(a, b) {
 // as a single 1-hop cost, when both only connect through First (a real
 // 2-hop detour). With only 4 possible exhibit floors this is exact, not
 // an approximation, and generalizes automatically if the floor graph ever
-// changes.
+// changes. Each hop is scaled by FLOOR_TRANSITION_COST (a hop used to be
+// worth flat `1`, the same unit as one weight-10 item's loot-time, until
+// 2026-08-23 — the user confirmed a real transition costs much closer to
+// a glass-cutter item's time, so it's scaled up to match rather than
+// silently under-weighted against item time-costs).
 export function exhibitTravelCost(floorSet) {
   const floors = [...floorSet];
   if (floors.length <= 1) return 0;
@@ -688,7 +718,7 @@ export function exhibitTravelCost(floorSet) {
     for (const a of inTree) {
       for (const b of floors) {
         if (inTree.has(b)) continue;
-        const d = shortestFloorDistance(a, b);
+        const d = shortestFloorDistance(a, b) * FLOOR_TRANSITION_COST;
         if (!best || d < best.d) best = { floor: b, d };
       }
     }
@@ -746,7 +776,10 @@ export function packBinsForTime(items, bins, capacityPerBin) {
   const nonExhibit = items.filter(it => !EXHIBIT_FLOORS.has(it.floor));
   const exhibit = items.filter(it => EXHIBIT_FLOORS.has(it.floor));
 
-  const prePack = packBins(nonExhibit.map(it => ({ ...it })), [], bins, capacityPerBin);
+  // 'Loading Bay' is routed away from the host here specifically — see
+  // packBins()'s `extraHostAvoidFloors` doc comment above for why this
+  // isn't just added to the shared HOST_AVOID_FLOORS constant instead.
+  const prePack = packBins(nonExhibit.map(it => ({ ...it })), [], bins, capacityPerBin, new Set(['Loading Bay']));
   if (!prePack) return null; // should not happen — see doc comment above
   const bagsOut = prePack.bags.map(b => ({ items: b.items.slice(), value: b.value, weightUsed: b.weightUsed }));
 

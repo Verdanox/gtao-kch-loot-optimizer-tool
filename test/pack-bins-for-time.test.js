@@ -58,14 +58,21 @@ function binTimeCost(bag) {
 // Real regression fixture (2026-08-22 session): the same 8-item, 2-player
 // scope-out compared against an independent calculator's output — both
 // tools agreed on item selection and total value ($577,500) but split
-// bags differently. Hand-verified minimum bottleneck for this exact item
-// set, under this session's time-weight tiers and exhibitTravelCost, is 8
-// (achieved by several tied partitions, including the one the other
-// calculator produced: host = {The Chief, Fertility Statue, Meteorite
-// Fragment, Art Deco Circlets}, cost 8; other player = {Het Gouden Hondje,
-// Byzantine Hoops, Antique Rings, Gemstone}, cost 7). This tool's own
-// DEFAULT (value-model) split for the same items scores 12 on this same
-// metric — confirming the real divergence this feature was built to close.
+// bags differently. The exact expected bottleneck numbers below were
+// updated 2026-08-23 when timeWeightFor() switched to the user's real
+// per-item `lootTimeWeight` data (replacing the old 3-tier weight/
+// requiresPreps heuristic) and FLOOR_TRANSITION_COST scaled a floor hop
+// from flat 1 up to 5 (matching a glass-cutter item's loot-time, per the
+// user) — both changes shift the absolute numbers but not the point of
+// the test: packBinsForTime() still finds a strictly better (lower
+// bottleneck) partition than the default value-model split for this exact
+// item set. Verified by hand: experimental bottleneck 16 (host = {Gemstone
+// tw5, The Chief tw4, Fertility Statue tw2} = 11 + First-CrispGallery
+// travel 5 = 16; other player = {Meteorite Fragment tw2, Byzantine Hoops
+// tw1, Antique Rings tw1, Art Deco Circlets tw1} = 5 + Alarm-First-Crisp
+// travel 10 = 15); default value-model split scores 22 (host ends up with
+// all four Crisp Gallery items plus Alarm Floor and First stragglers =
+// timeWeight 12 + travel 10 = 22).
 test('real regression fixture: packBinsForTime achieves the hand-verified minimum bottleneck (8), strictly better than the default split', () => {
   const values = {
     'B-D': 75000,   // Het Gouden Hondje (Vault)
@@ -108,20 +115,23 @@ test('real regression fixture: packBinsForTime achieves the hand-verified minimu
   const defaultBottleneck = costOf(defaultResult.bags);
   const experimentalBottleneck = costOf(experimentalResult.bags);
 
-  assert.equal(experimentalBottleneck, 8, 'expected the hand-verified true minimum bottleneck');
-  assert.equal(defaultBottleneck, 12, 'expected the default value-model split\'s bottleneck, for contrast');
+  assert.equal(experimentalBottleneck, 16, 'expected the hand-verified true minimum bottleneck');
+  assert.equal(defaultBottleneck, 22, 'expected the default value-model split\'s bottleneck, for contrast');
   assert.ok(experimentalBottleneck < defaultBottleneck);
 });
 
 // Direct test of exhibitTravelCost()'s shortest-path behavior: Alarm Floor
 // and Crisp Gallery only connect through First (a real 2-hop detour), so
 // a bin touching both must cost strictly more than a bin touching two
-// floors that are directly adjacent.
+// floors that are directly adjacent. Each hop is scaled by
+// FLOOR_TRANSITION_COST (5, as of 2026-08-23 — a hop now costs about the
+// same as a glass-cutter item's loot-time, per the user), so a 1-hop
+// adjacency costs 5 and a 2-hop detour costs 10, not flat 1/2.
 test('exhibitTravelCost: a non-adjacent floor pair costs strictly more than an adjacent one', () => {
   const adjacent = exhibitTravelCost(new Set(['Alarm Floor', 'First']));
   const nonAdjacent = exhibitTravelCost(new Set(['Alarm Floor', 'Crisp Gallery']));
-  assert.equal(adjacent, 1);
-  assert.equal(nonAdjacent, 2);
+  assert.equal(adjacent, 5);
+  assert.equal(nonAdjacent, 10);
   assert.ok(nonAdjacent > adjacent);
 });
 
@@ -130,8 +140,8 @@ test('exhibitTravelCost: a single floor or empty set costs zero', () => {
   assert.equal(exhibitTravelCost(new Set(['First'])), 0);
 });
 
-test('exhibitTravelCost: all four exhibit floors together cost exactly 3 (a star through First)', () => {
-  assert.equal(exhibitTravelCost(new Set(['Alarm Floor', 'First', 'Second', 'Crisp Gallery'])), 3);
+test('exhibitTravelCost: all four exhibit floors together cost exactly 15 (a 3-hop star through First, scaled by FLOOR_TRANSITION_COST)', () => {
+  assert.equal(exhibitTravelCost(new Set(['Alarm Floor', 'First', 'Second', 'Crisp Gallery'])), 15);
 });
 
 // Direct packBinsForTime() test (bypassing runOptimizer): Vault/Loading Bay
