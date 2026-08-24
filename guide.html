@@ -44,6 +44,7 @@
 
   <div class="step">
     <span class="step-num">§</span><span class="step-title">Who Grabs What</span>
+    <p class="hint" id="experimentalPackingNote" style="display:none; margin-top:16px;">⚡ Experimental: time-optimized packing is on — bags below are balanced for loot-time + floor travel between players, not just maximum bag value placement. Total secondary value is unaffected. Toggle this off on Scope &amp; Setup for the default split.</p>
     <div class="step-body" id="itemsList"></div>
   </div>
 
@@ -270,6 +271,7 @@ function renderBagSection(r){
 function renderItemsList(r){
   const container = document.getElementById('itemsList');
   container.innerHTML = '';
+  document.getElementById('experimentalPackingNote').style.display = state.experimentalPacking ? '' : 'none';
 
   for (let i = 0; i < state.players; i++){
     const bag = r.bags[i];

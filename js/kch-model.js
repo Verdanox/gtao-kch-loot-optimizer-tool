@@ -368,7 +368,20 @@ function floorsAdjacent(a, b) {
   return a !== undefined && b !== undefined && !!FLOOR_ADJACENCY[a] && FLOOR_ADJACENCY[a].has(b);
 }
 
-export function packBins(mandatory, optional, bins, capacityPerBin) {
+// `extraHostAvoidFloors` (2026-08-23): an optional Set, unioned with
+// HOST_AVOID_FLOORS for this call only — every existing caller omits it
+// and sees zero behavior change. Added specifically for
+// packBinsForTime()'s non-exhibit pre-pass (see its doc comment), which
+// needs 'Loading Bay' routed away from the host even though the shared
+// HOST_AVOID_FLOORS constant deliberately does NOT include it for the
+// default value-model — the user confirmed 2026-08-23 that in real runs
+// the value model's own tier-1 host-priority crowding already tends to
+// push Loading Bay off the host's bag "by accident," so no fix was needed
+// there; the time model's isolated single-item pre-pass has no such
+// crowding and was defaulting Loading Bay onto the host via plain
+// ascending-bin-index tie-break, which the user wants avoided (fine for a
+// solo run, not otherwise).
+export function packBins(mandatory, optional, bins, capacityPerBin, extraHostAvoidFloors) {
   const allWeights = [...mandatory, ...optional].map(i => i.weightUnits).filter(w => w > 0);
   const unit = allWeights.reduce((g, w) => gcd(g, w), capacityPerBin);
   const cap = Math.round(capacityPerBin / unit);
@@ -571,7 +584,7 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
     // ever narrows among candidates already confirmed not to cost the
     // optimal total, and falls back to including the host when they're
     // the only remaining valid bag (solo runs, or every other bag full).
-    if (HOST_AVOID_FLOORS.has(it.floor)) {
+    if (HOST_AVOID_FLOORS.has(it.floor) || (extraHostAvoidFloors && extraHostAvoidFloors.has(it.floor))) {
       const nonHost = candidates.filter(c => c.b !== 0);
       if (nonHost.length > 0) candidates = nonHost;
     }
@@ -613,6 +626,276 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
   return { value: totalValue, bags: bagsOut };
 }
 
+// ---------- experimental: time-optimized packing ----------
+// Backing model for the "Experimental: time-optimized packing" Advanced
+// Settings toggle on index.html (2026-08-23). Item SELECTION is never
+// touched by any of this — packBins() above remains the single source of
+// truth for which items get chosen and their total dollar value. This
+// only offers an alternate BAG-ASSIGNMENT strategy for an already-
+// selected item set, designed from a real observed divergence between
+// this tool's default bag split and an independent calculator on an
+// identical scope-out: the two agreed on item selection and total value
+// exactly, but split bags differently — the other calculator kept the
+// host to a tighter, fully-adjacent floor route by routing the crew's
+// one Alarm Floor item to a teammate instead.
+//
+// Scope is deliberately narrow: only Alarm Floor/First/Second/Crisp
+// Gallery ("exhibit floors") carry any time-cost at all. Vault and
+// Loading Bay contribute zero — both are effectively fixed, mandatory
+// stops regardless of loot (the host must enter the Vault for the
+// Primary Target either way), so this model only measures the genuinely
+// discretionary exhibit-floor routing choice. This is a distinct concept
+// from HOST_AVOID_FLOORS above, which also contains 'Vault' (for an
+// unrelated reason) and 'Alarm Floor' (which IS an exhibit floor here, on
+// purpose — HOST_AVOID_FLOORS is about the default value-model's tier-0
+// preference, not this one).
+const EXHIBIT_FLOORS = new Set(['Alarm Floor', 'First', 'Second', 'Crisp Gallery']);
+const EXHIBIT_FLOOR_LIST = [...EXHIBIT_FLOORS];
+const EXHIBIT_FLOOR_INDEX = new Map(EXHIBIT_FLOOR_LIST.map((f, i) => [f, i]));
+
+// Item time-weight, 2026-08-23: prefers the real per-item
+// `lootTimeWeight` the user hand-tuned into secondary-loot.json (see its
+// `_notes` entry for the 1-5 scale and how it was sourced) over the older
+// 3-tier weight/requiresPreps-derived heuristic below, which now only
+// serves as a fallback for any item that field is absent on (e.g. a
+// future catalog addition that ships before its real value is known —
+// never Vault/BAY today, since those are filtered out of the exhibit set
+// before this function is ever called on them). Never read by the
+// default packBins() path above.
+export function timeWeightFor(catItem) {
+  if (typeof catItem.lootTimeWeight === 'number') return catItem.lootTimeWeight;
+  if ((catItem.requiresPreps || []).includes('glass-cutter')) return 3;
+  return catItem.weight === 10 ? 1 : 2; // weight 20, or 50 (painting)
+}
+
+// A single floor transition costs about the same as a glass-cutter item's
+// loot time (tier 5 on timeWeightFor()'s scale) — confirmed with the user
+// 2026-08-23. Kept as one named constant rather than baked into the
+// BFS/MST math directly, so the ratio stays visible and adjustable in one
+// place if the relative scale above is ever retuned.
+const FLOOR_TRANSITION_COST = 5;
+
+// BFS shortest-path distance (in floor-transitions) between two floors,
+// over the same FLOOR_ADJACENCY graph packBins()'s tier 3 already uses.
+function shortestFloorDistance(a, b) {
+  if (a === b) return 0;
+  const seen = new Set([a]);
+  let frontier = [a];
+  let dist = 0;
+  while (frontier.length) {
+    dist++;
+    const next = [];
+    for (const f of frontier) {
+      for (const n of FLOOR_ADJACENCY[f] || []) {
+        if (n === b) return dist;
+        if (!seen.has(n)) { seen.add(n); next.push(n); }
+      }
+    }
+    frontier = next;
+  }
+  return Infinity; // never reached for two exhibit floors — the exhibit subgraph is fully connected through First
+}
+
+// True minimal cost to route through every floor in `floorSet` (a Set of
+// exhibit-floor names) — the MST weight over the complete graph of
+// pairwise shortest-path distances between them, NOT a flat "distinct
+// floors - 1" count. A flat count would treat Alarm Floor + Crisp Gallery
+// as a single 1-hop cost, when both only connect through First (a real
+// 2-hop detour). With only 4 possible exhibit floors this is exact, not
+// an approximation, and generalizes automatically if the floor graph ever
+// changes. Each hop is scaled by FLOOR_TRANSITION_COST (a hop used to be
+// worth flat `1`, the same unit as one weight-10 item's loot-time, until
+// 2026-08-23 — the user confirmed a real transition costs much closer to
+// a glass-cutter item's time, so it's scaled up to match rather than
+// silently under-weighted against item time-costs).
+export function exhibitTravelCost(floorSet) {
+  const floors = [...floorSet];
+  if (floors.length <= 1) return 0;
+  const inTree = new Set([floors[0]]);
+  let total = 0;
+  while (inTree.size < floors.length) {
+    let best = null;
+    for (const a of inTree) {
+      for (const b of floors) {
+        if (inTree.has(b)) continue;
+        const d = shortestFloorDistance(a, b) * FLOOR_TRANSITION_COST;
+        if (!best || d < best.d) best = { floor: b, d };
+      }
+    }
+    total += best.d;
+    inTree.add(best.floor);
+  }
+  return total;
+}
+
+// Precomputed exhibitTravelCost() for every possible floor-touched bitmask
+// (only 16, since there are only 4 exhibit floors) — keeps
+// packBinsForTime()'s inner search loop from recomputing the same small
+// MST repeatedly.
+const TRAVEL_COST_BY_MASK = Array.from({ length: 1 << EXHIBIT_FLOOR_LIST.length }, (_, mask) => {
+  const floors = EXHIBIT_FLOOR_LIST.filter((_, i) => mask & (1 << i));
+  return exhibitTravelCost(new Set(floors));
+});
+
+// Given an ALREADY-SELECTED flat item list (each { id, value, weightUnits,
+// floor, timeWeight, order? }) — never a fresh knapsack search — packs
+// them into `bins` bags of `capacityPerBin` each to minimize the
+// bottleneck (max) per-player time-cost, instead of packBins()'s value-
+// maximizing objective. Item selection/total dollar value are whatever
+// the caller already decided; this only changes which bag each item lands
+// in. Returns { bags } in the same shape packBins() returns, or null if no
+// feasible placement was found (see the limitation note below) — callers
+// should fall back to whatever packing they already had, exactly like a
+// null packBins() result.
+//
+// Two phases:
+//  1. Vault/Loading Bay items are placed first via a plain call to
+//     packBins() itself (as all-mandatory, no optional items) — reusing
+//     its already-correct tier-0 host-avoid-Vault logic with zero
+//     duplicated code. This is always feasible on its own (the full
+//     combined item set was already proven bin-packable by the caller's
+//     original packBins() run, and a feasible packing of a subset of
+//     already-packed items trivially still fits).
+//  2. Exhibit-floor items are placed into whatever capacity remains via
+//     an EXACT minimax search over a candidate max-cost threshold T (not
+//     a greedy heuristic) — a greedy assignment isn't guaranteed to find
+//     a feasible packing even when one exists, the same class of bug
+//     packBins() itself was rewritten to avoid on 2026-08-01.
+//
+// Known limitation, accepted for "experimental" status: phase 1's fresh
+// Vault/Loading Bay placement isn't provably guaranteed to leave enough
+// remaining capacity for phase 2 to succeed in every theoretically
+// possible case (a single joint search across both phases would close
+// this gap, at real added complexity). In practice this is a non-issue
+// for this catalog — Vault/Loading Bay items are few and comparatively
+// light against 100-capacity bags — but if phase 2 genuinely can't find a
+// feasible split, this returns null rather than an invalid/overflowing
+// bag, and the caller keeps its existing (value-preserving, default-
+// heuristic) bag split for that run.
+export function packBinsForTime(items, bins, capacityPerBin) {
+  const nonExhibit = items.filter(it => !EXHIBIT_FLOORS.has(it.floor));
+  const exhibit = items.filter(it => EXHIBIT_FLOORS.has(it.floor));
+
+  // 'Loading Bay' is routed away from the host here specifically — see
+  // packBins()'s `extraHostAvoidFloors` doc comment above for why this
+  // isn't just added to the shared HOST_AVOID_FLOORS constant instead.
+  const prePack = packBins(nonExhibit.map(it => ({ ...it })), [], bins, capacityPerBin, new Set(['Loading Bay']));
+  if (!prePack) return null; // should not happen — see doc comment above
+  const bagsOut = prePack.bags.map(b => ({ items: b.items.slice(), value: b.value, weightUsed: b.weightUsed }));
+
+  if (exhibit.length === 0) return { bags: bagsOut };
+
+  const remainingCapacity = bagsOut.map(b => capacityPerBin - b.weightUsed);
+
+  // Largest-time-weight-first (mirrors packBins()'s own largest-weight-
+  // first tiebreak within a priority floor), `order` as the final
+  // tiebreak — same catalog-position convention packBins() uses.
+  const exhibitSorted = exhibit.slice().sort((a, b) =>
+    (b.timeWeight - a.timeWeight) || ((a.order ?? 0) - (b.order ?? 0))
+  );
+
+  function buildChecker(T) {
+    const memo = new Map();
+    function rec(i, caps, masks, sums) {
+      if (i === exhibitSorted.length) return true;
+      const key = i + '|' + caps.join(',') + '|' + masks.join(',') + '|' + sums.join(',');
+      const cached = memo.get(key);
+      if (cached !== undefined) return cached;
+      const it = exhibitSorted[i];
+      const bit = 1 << EXHIBIT_FLOOR_INDEX.get(it.floor);
+      let ok = false;
+      for (let b = 0; b < bins; b++) {
+        if (caps[b] < it.weightUnits) continue;
+        const newMask = masks[b] | bit;
+        const newSum = sums[b] + it.timeWeight;
+        if (newSum + TRAVEL_COST_BY_MASK[newMask] > T) continue;
+        const nextCaps = caps.slice(); nextCaps[b] -= it.weightUnits;
+        const nextMasks = masks.slice(); nextMasks[b] = newMask;
+        const nextSums = sums.slice(); nextSums[b] = newSum;
+        if (rec(i + 1, nextCaps, nextMasks, nextSums)) { ok = true; break; }
+      }
+      memo.set(key, ok);
+      return ok;
+    }
+    return rec;
+  }
+
+  const zeros = new Array(bins).fill(0);
+  // Safe upper bound for the minimal bottleneck: any single bin's cost is
+  // at most the sum of every exhibit item's time-weight (if they all
+  // landed in one bin) plus 3 (the max possible exhibitTravelCost across
+  // all 4 exhibit floors — see its own doc comment).
+  const tMax = exhibitSorted.reduce((s, it) => s + it.timeWeight, 0) + 3;
+  let bestT = null;
+  let bestRec = null;
+  for (let T = 0; T <= tMax; T++) {
+    const rec = buildChecker(T);
+    if (rec(0, remainingCapacity, zeros, zeros)) { bestT = T; bestRec = rec; break; }
+  }
+  if (bestT === null) return null; // should not happen — see doc comment above
+
+  // Reconstruct one concrete assignment achieving bestT, choosing among
+  // cost-preserving candidates via the same tiers 2-4 packBins() already
+  // uses above (same-floor clustering -> adjacent-floor -> most remaining
+  // capacity -> ascending bin index) — confirmed with the user this
+  // session. Tier 1 (host-priority for Crisp Gallery/Second) is
+  // deliberately not reused here — it's about the value model's
+  // EMP-verification rationale, unrelated to this objective.
+  let caps = remainingCapacity.slice();
+  let masks = zeros.slice();
+  let sums = zeros.slice();
+  for (let i = 0; i < exhibitSorted.length; i++) {
+    const it = exhibitSorted[i];
+    const bit = 1 << EXHIBIT_FLOOR_INDEX.get(it.floor);
+    const candidates = [];
+    for (let b = 0; b < bins; b++) {
+      if (caps[b] < it.weightUnits) continue;
+      const newMask = masks[b] | bit;
+      const newSum = sums[b] + it.timeWeight;
+      if (newSum + TRAVEL_COST_BY_MASK[newMask] > bestT) continue;
+      const nextCaps = caps.slice(); nextCaps[b] -= it.weightUnits;
+      const nextMasks = masks.slice(); nextMasks[b] = newMask;
+      const nextSums = sums.slice(); nextSums[b] = newSum;
+      if (bestRec(i + 1, nextCaps, nextMasks, nextSums)) {
+        candidates.push({ b, nextCaps, nextMasks, nextSums });
+      }
+    }
+
+    const floorMatches = candidates.filter(c => bagsOut[c.b].items.some(x => x.floor === it.floor));
+    let chosen = floorMatches.reduce((best, c) => (!best || caps[c.b] > caps[best.b]) ? c : best, null);
+    if (!chosen) {
+      const adjMatches = candidates.filter(c => bagsOut[c.b].items.some(x => floorsAdjacent(it.floor, x.floor)));
+      chosen = adjMatches.reduce((best, c) => (!best || caps[c.b] > caps[best.b]) ? c : best, null);
+    }
+    if (!chosen) {
+      chosen = candidates.reduce((best, c) => (!best || caps[c.b] > caps[best.b]) ? c : best, null);
+    }
+
+    bagsOut[chosen.b].items.push({ id: it.id, value: it.value, weightUnits: it.weightUnits, floor: it.floor });
+    bagsOut[chosen.b].value += it.value;
+    bagsOut[chosen.b].weightUsed += it.weightUnits;
+    caps = chosen.nextCaps;
+    masks = chosen.nextMasks;
+    sums = chosen.nextSums;
+  }
+
+  return { bags: bagsOut };
+}
+
+// Shared reachability predicate (2026-08-23) — consolidates the crew-size
+// check with the new prep-skip check (state.skipPreps) so both call sites
+// in runOptimizer() below can never silently disagree, the way two
+// independent inline checks risked doing once a second gate existed.
+// requiresPreps items (see secondary-loot.json) are unreachable only when
+// the user has explicitly marked that prep as skipped this run —
+// state.skipPreps defaults to [], exactly matching pre-2026-08-23
+// behavior (every prep assumed done).
+export function isItemReachable(catItem, state) {
+  if (catItem.minPlayers > state.players) return false;
+  const reqs = catItem.requiresPreps || [];
+  return reqs.every(p => !(state.skipPreps || []).includes(p));
+}
+
 // ---------- optimizer ----------
 // Buyer's Choice items are locked in first (mandatory) only when Elite
 // Challenge is attempted; with Elite off, Buyer's Choice tags are purely
@@ -651,7 +934,7 @@ export function packBins(mandatory, optional, bins, capacityPerBin) {
 // alone, unlike simply having grabbed the marked items.
 export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstants) {
   const valid = state.loot.filter(l => l.value !== '' && l.value !== null && l.value !== undefined && !isNaN(l.value));
-  const eligible = valid.filter(l => itemById(catalog, l.itemId).minPlayers <= state.players);
+  const eligible = valid.filter(l => isItemReachable(itemById(catalog, l.itemId), state));
   // `order` = each item's position in `eligible` (already catalog-ordered)
   // — passed through to packBins() so its reconstruction always walks
   // items in true catalog order, regardless of which of them end up in
@@ -675,7 +958,7 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
   const bcValid = valid.filter(l => l.buyersChoice);
   const bcIdsSet = new Set(bcValid.map(l => l.itemId));
   const bcIneligibleIds = bcValid
-    .filter(l => itemById(catalog, l.itemId).minPlayers > state.players)
+    .filter(l => !isItemReachable(itemById(catalog, l.itemId), state))
     .map(l => l.itemId);
 
   // Elite Challenge requires at least 2 Buyer's Choice picks to be a real
@@ -719,6 +1002,26 @@ export function runOptimizer(state, catalog, bagCapacityPerPlayer, bonusConstant
     // -> always forfeited, regardless of what the unconstrained pack
     // happened to pack.
     allBuyerItemsFit = !attempted;
+  }
+
+  // "Experimental: time-optimized packing" Advanced Settings toggle
+  // (state.experimentalPacking, default false, 2026-08-23) — purely
+  // additive, never touches packBins() above or which items got
+  // selected/their value. Re-derives ONLY the bag assignment for the
+  // exact same chosen item set, to balance exhibit-floor time-cost
+  // between players instead of just maximizing bag value placement.
+  // Falls back to keeping the default packedBags untouched if
+  // packBinsForTime() can't find a feasible split (see its own doc
+  // comment) — always safe, since that's the split this function would
+  // have produced anyway.
+  if (state.experimentalPacking) {
+    const itemsForTime = packedBags.flatMap(b => b.items).map(i => ({
+      ...i,
+      order: orderById.get(i.id),
+      timeWeight: timeWeightFor(itemById(catalog, i.id))
+    }));
+    const repacked = packBinsForTime(itemsForTime, state.players, bagCapacityPerPlayer);
+    if (repacked) packedBags = repacked.bags;
   }
 
   const chosenIds = new Set(packedBags.flatMap(b => b.items.map(i => i.id)));
@@ -932,6 +1235,13 @@ export function defaultPage1State(catalog) {
     // 2026-08-15: 'no'/'yes', matching the string-valued convention every
     // other toggle field here uses (not a raw boolean) — see calcPrimary().
     keepPrimary: 'no',
+    // Advanced Settings toggles (2026-08-23), both default to the exact
+    // pre-existing behavior (every prep assumed done, default value-max
+    // bag assignment) — see isItemReachable() and packBinsForTime() above.
+    // skipPreps is an extensible array (not a one-off boolean) so a future
+    // prep-gated toggle just adds another string.
+    skipPreps: [],
+    experimentalPacking: false,
     playerNames: ['', '', '', ''],
     // `variant` is the optional cosmetic sub-type pick (see `variants` in
     // secondary-loot.json — only Gemstone has one today). Carried on every
@@ -954,6 +1264,8 @@ export function serializeState(page1, page2) {
       players: page1.players,
       elite: page1.elite,
       keepPrimary: page1.keepPrimary === 'yes' ? 'yes' : 'no',
+      skipPreps: Array.isArray(page1.skipPreps) ? page1.skipPreps.filter(p => typeof p === 'string') : [],
+      experimentalPacking: !!page1.experimentalPacking,
       playerNames: Array.isArray(page1.playerNames) ? page1.playerNames.slice(0, 4) : ['', '', '', ''],
       loot: (page1.loot || []).map(l => ({ itemId: l.itemId, value: l.value, buyersChoice: !!l.buyersChoice, variant: l.variant || '' }))
     },
@@ -987,6 +1299,8 @@ export function deserializeState(rawJsonString, fallbackPage1, fallbackPage2) {
       players: validPlayers.includes(parsed.page1.players) ? parsed.page1.players : fallbackPage1.players,
       elite: parsed.page1.elite === 'yes' ? 'yes' : 'no',
       keepPrimary: parsed.page1.keepPrimary === 'yes' ? 'yes' : 'no',
+      skipPreps: Array.isArray(parsed.page1.skipPreps) ? parsed.page1.skipPreps.filter(p => typeof p === 'string') : [],
+      experimentalPacking: !!parsed.page1.experimentalPacking,
       playerNames: Array.isArray(parsed.page1.playerNames)
         ? [0, 1, 2, 3].map(i => typeof parsed.page1.playerNames[i] === 'string' ? parsed.page1.playerNames[i] : '')
         : fallbackPage1.playerNames,
