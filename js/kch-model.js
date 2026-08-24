@@ -1216,7 +1216,12 @@ export function buildScopeCsv(loot, catalog) {
   catalog.forEach(cat => {
     const entry = lootById.get(cat.itemId);
     const scoped = entry && entry.value !== '' && entry.value !== null && entry.value !== undefined && !isNaN(entry.value);
-    rows.push([cat.name, cat.floor, scoped ? String(Number(entry.value)) : '']);
+    // Buyer's Choice marker (2026-08-23): a trailing "*" on the Item name,
+    // not the Value — Value must stay a bare number for every row (see
+    // above) so a spreadsheet treats it as numeric on paste; marking it up
+    // would silently turn just the BC rows' Value cells into text instead.
+    const name = entry && entry.buyersChoice ? `${cat.name}*` : cat.name;
+    rows.push([name, cat.floor, scoped ? String(Number(entry.value)) : '']);
   });
   return rows.map(r => r.map(csvEscapeField).join(',')).join('\r\n');
 }

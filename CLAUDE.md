@@ -28,8 +28,13 @@ entirely through `localStorage` (no view-swap, no SPA framework):
   can't disambiguate them if both are scoped in the same run; the user
   chose a Floor column over renaming/suffixing the items themselves.
   Value is a plain number (no `$`, no thousands separator) so a
-  spreadsheet treats it as numeric on paste, not text. The CSV-building
-  logic itself (`buildScopeCsv()`) lives in `js/kch-model.js`, not here —
+  spreadsheet treats it as numeric on paste, not text. **A Buyer's Choice
+  item gets a trailing `*` on its Item name** (2026-08-23, user request),
+  never on Value — appending it to Value directly would've turned just
+  those rows' Value cells into text on paste, silently breaking the
+  numeric-paste guarantee for exactly the up-to-3 BC rows in a run, so the
+  marker goes on the one column that was always free-text anyway. The
+  CSV-building logic itself (`buildScopeCsv()`) lives in `js/kch-model.js`, not here —
   same reason every other piece of shared logic does: it's pure
   (filtering/ordering/escaping, no `document`/clipboard), so it gets real
   `node --test` coverage against `fixtures/sample-run.json`

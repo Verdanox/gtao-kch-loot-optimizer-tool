@@ -65,7 +65,10 @@ test('one row per catalog item (blank Value if unscoped), in catalog order, agai
   const scopedIds = new Set(catalog.filter(cat => sampleRun.secondaryLoot[cat.itemId] !== undefined).map(cat => cat.itemId));
   lines.slice(1).forEach(line => {
     const [name, floor, value] = line.split(',');
-    const cat = catalog.find(c => c.name === name && c.floor === floor);
+    // Strip the Buyer's Choice "*" marker (2026-08-23) before matching
+    // back to the catalog — it's appended to the Item name, not part of it.
+    const bareName = name.endsWith('*') ? name.slice(0, -1) : name;
+    const cat = catalog.find(c => c.name === bareName && c.floor === floor);
     if (cat && scopedIds.has(cat.itemId)) {
       assert.ok(/^\d+$/.test(value), `value field "${value}" should be a bare integer`);
     } else {
@@ -85,6 +88,23 @@ test('name collisions are disambiguated by the Floor column', () => {
   const lines = csv.split('\r\n').slice(1);
   assert.ok(lines.includes('Oeuf de Coquard,Alarm Floor,20000'));
   assert.ok(lines.includes('Oeuf de Coquard,Second,54000'));
+});
+
+test('Buyer\'s Choice items get a trailing "*" on the Item name, never on Value', () => {
+  const loot = catalog.map(cat => {
+    if (cat.itemId === '2-H') return { itemId: cat.itemId, value: 105000, buyersChoice: true, variant: '' };
+    return { itemId: cat.itemId, value: '', buyersChoice: false, variant: '' };
+  });
+  const csv = buildScopeCsv(loot, catalog);
+  const lines = csv.split('\r\n');
+  const gemstone = itemById(catalog, '2-H');
+  assert.ok(lines.includes(`${gemstone.name}*,${gemstone.floor},105000`));
+  // Every other row's Item name is untouched (no stray "*").
+  const nonBcLines = lines.slice(1).filter(l => !l.startsWith(`${gemstone.name}*,`));
+  for (const line of nonBcLines) {
+    const [name] = line.split(',');
+    assert.ok(!name.endsWith('*'), `unexpected "*" on non-Buyer's-Choice row: ${line}`);
+  }
 });
 
 test('fields containing a comma or quote are RFC4180-escaped', () => {
