@@ -1210,7 +1210,7 @@ function csvEscapeField(field) {
 // special-casing — it just gets a blank Value row like any other
 // unchecked item. Pure/DOM-free like every other function here —
 // index.html owns the actual `navigator.clipboard` call.
-export function buildScopeCsv(loot, catalog) {
+export function buildScopeCsv(loot, catalog, crewComparisonResults) {
   const lootById = new Map(loot.map(l => [l.itemId, l]));
   const rows = [['Item', 'Floor', 'Value']];
   catalog.forEach(cat => {
@@ -1223,6 +1223,15 @@ export function buildScopeCsv(loot, catalog) {
     const name = entry && entry.buyersChoice ? `${cat.name}*` : cat.name;
     rows.push([name, cat.floor, scoped ? String(Number(entry.value)) : '']);
   });
+
+  if (Array.isArray(crewComparisonResults) && crewComparisonResults.length) {
+    rows.push([]);
+    rows.push(['Players', 'No Elite', 'With Elite']);
+    crewComparisonResults.forEach(r => {
+      rows.push([String(r.players), String(r.secondaryShareEach), String(r.secondaryShareEachWithElite)]);
+    });
+  }
+
   return rows.map(r => r.map(csvEscapeField).join(',')).join('\r\n');
 }
 
