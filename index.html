@@ -85,6 +85,14 @@
     </div>
   </div>
 
+  <div class="step">
+    <span class="step-num">§</span><span class="step-title">Crew Size Comparison</span>
+    <div class="step-body">
+      <p class="hint">Per-player secondary loot share at every crew size, using the values you've entered so far. <b>No Elite</b> is a pure value-max pack — Elite completion is never guaranteed, so it shouldn't by itself skew which crew size looks best. <b>With Elite</b> reruns the same scope-out with your actual Buyer's Choice marks forced in at each crew size instead — same raw secondary share, no bonus dollars added — since some crews still go for the Elite Challenge even though the bonus isn't counted in Career Progress. Solo players cannot access Crisp Gallery items (2+ players required), so a smaller crew means fewer eligible items, not just a bigger total split more ways.</p>
+      <div class="crew-compare" id="crewSizeLedger"></div>
+    </div>
+  </div>
+
   <!-- STEP 4: Crew -->
   <div class="step">
     <span class="step-num">4</span><span class="step-title">Crew Size</span>
@@ -158,12 +166,14 @@ import {
   defaultPage1State, defaultPage2State,
   serializeState, deserializeState, mergeLootByItemId,
   buildScopeCsv,
+  money, compareCrewSizes, DEFAULT_BONUS_CONSTANTS,
   STORAGE_KEY
 } from './js/kch-model.js';
 
 // ---------- DATA (loaded at runtime from data/*.json) ----------
 let PRIMARY_TARGETS = [];
 let LOOT_CATALOG = [];
+let BAG_CAPACITY_PER_PLAYER = 100;
 
 const FEEDBACK_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSde7tKREst9V7fat-8c6yTpRWZkq6k4nNLVK07hNc4wJviivg/viewform?embedded=true';
 
@@ -289,7 +299,8 @@ function initCopyCsvControls(){
   const defaultLabel = btn.textContent;
   let revertTimer = null;
   btn.addEventListener('click', async () => {
-    const csv = buildScopeCsv(state.loot, LOOT_CATALOG);
+    const crewResults = compareCrewSizes(state, LOOT_CATALOG, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+    const csv = buildScopeCsv(state.loot, LOOT_CATALOG, crewResults);
     clearTimeout(revertTimer);
     try {
       await navigator.clipboard.writeText(csv);
@@ -575,10 +586,40 @@ function renderPrimaryInfo(){
   }
 }
 
+function renderCrewSizeComparison(){
+  const container = document.getElementById('crewSizeLedger');
+  container.innerHTML = '';
+
+  const results = compareCrewSizes(state, LOOT_CATALOG, BAG_CAPACITY_PER_PLAYER, DEFAULT_BONUS_CONSTANTS);
+  const bestWithout = Math.max(...results.map(r => r.secondaryShareEach));
+  const bestWith = Math.max(...results.map(r => r.secondaryShareEachWithElite));
+
+  const head = document.createElement('div');
+  head.className = 'crew-compare-row head';
+  head.innerHTML = `<span></span><span style="text-align:right;">No Elite</span><span style="text-align:right;">With Elite</span>`;
+  container.appendChild(head);
+
+  results.forEach(r => {
+    const isCurrent = r.players === state.players;
+    const isBestWithout = bestWithout > 0 && r.secondaryShareEach === bestWithout;
+    const isBestWith = bestWith > 0 && r.secondaryShareEachWithElite === bestWith;
+    const label = `${r.players} Player${r.players > 1 ? 's' : ''}`;
+    const row = document.createElement('div');
+    row.className = 'crew-compare-row' + (isCurrent ? ' current' : '');
+    row.innerHTML = `
+      <span class="k">${label}${isCurrent ? '<span class="flag">CURRENT</span>' : ''}</span>
+      <span class="v">${money(r.secondaryShareEach)}${isBestWithout ? '<span class="flag">BEST</span>' : ''}</span>
+      <span class="v">${money(r.secondaryShareEachWithElite)}${isBestWith ? '<span class="flag">BEST</span>' : ''}</span>
+    `;
+    container.appendChild(row);
+  });
+}
+
 function renderAll(fullLootRerender = true){
   if (fullLootRerender) renderLootList();
   renderPrimaryInfo();
   renderPlayerNames();
+  renderCrewSizeComparison();
   saveState();
 }
 
@@ -598,6 +639,7 @@ async function init(){
     // never disagrees with the actual payout order.
     PRIMARY_TARGETS = primaryData.targets.slice().sort((a, b) => b.baseValue - a.baseValue);
     LOOT_CATALOG = lootData.items;
+    BAG_CAPACITY_PER_PLAYER = lootData.bagCapacityPerPlayer;
 
     loadPersisted();
 
