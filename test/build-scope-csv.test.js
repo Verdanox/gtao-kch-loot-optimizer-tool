@@ -116,3 +116,28 @@ test('fields containing a comma or quote are RFC4180-escaped', () => {
   const lines = csv.split('\r\n');
   assert.equal(lines[1], '"Weird, ""Named"" Item",First,1000');
 });
+
+test('omitting crewComparisonResults leaves the CSV unchanged', () => {
+  const loot = lootFromSampleRun();
+  const withoutArg = buildScopeCsv(loot, catalog);
+  const withEmptyArray = buildScopeCsv(loot, catalog, []);
+  assert.equal(withoutArg, withEmptyArray);
+});
+
+test('crewComparisonResults, when given, are appended after a blank line', () => {
+  const loot = lootFromSampleRun();
+  const crewResults = [
+    { players: 1, secondaryShareEach: 100000, secondaryShareEachWithElite: 90000 },
+    { players: 2, secondaryShareEach: 60000, secondaryShareEachWithElite: 55000 },
+    { players: 3, secondaryShareEach: 45000, secondaryShareEachWithElite: 40000 },
+    { players: 4, secondaryShareEach: 35000, secondaryShareEachWithElite: 30000 },
+  ];
+  const csv = buildScopeCsv(loot, catalog, crewResults);
+  const lines = csv.split('\r\n');
+
+  assert.equal(lines.length, 1 + catalog.length + 1 + 1 + crewResults.length);
+  assert.equal(lines[catalog.length + 1], '');
+  assert.equal(lines[catalog.length + 2], 'Players,No Elite,With Elite');
+  assert.equal(lines[catalog.length + 3], '1,100000,90000');
+  assert.equal(lines[catalog.length + 6], '4,35000,30000');
+});
